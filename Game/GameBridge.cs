@@ -42,11 +42,31 @@ namespace Volas
             }
         }
 
+        // Camera.main can be null in VR games: the active headset camera
+        // is often not tagged MainCamera. Prefer an active stereo camera.
         internal Camera HeadCamera
         {
             get
             {
-                if (cachedCamera == null) cachedCamera = Camera.main;
+                if (cachedCamera != null && cachedCamera.isActiveAndEnabled)
+                    return cachedCamera;
+
+                Camera candidate = Camera.main;
+                Camera[] cameras = Camera.allCameras;
+                for (int i = 0; i < cameras.Length; i++)
+                {
+                    Camera current = cameras[i];
+                    if (current == null || !current.isActiveAndEnabled) continue;
+                    if (current.stereoTargetEye != StereoTargetEyeMask.None)
+                    {
+                        cachedCamera = current;
+                        return cachedCamera;
+                    }
+                    if (candidate == null) candidate = current;
+                }
+                if (candidate == null)
+                    candidate = UnityEngine.Object.FindObjectOfType<Camera>();
+                cachedCamera = candidate;
                 return cachedCamera;
             }
         }
