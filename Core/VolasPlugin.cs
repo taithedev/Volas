@@ -73,6 +73,7 @@ namespace Volas
             Vr = new VrMenu(this);
             desktop = new DesktopMenu(this);
             Logger.LogInfo("Volas loaded. F6 = desktop menu, left Y = VR menu, End = reset mods.");
+            Logger.LogInfo(AssemblyDiagnostics.AssemblyInfo());
         }
 
         private void Update()

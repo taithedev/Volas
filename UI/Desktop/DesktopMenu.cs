@@ -127,6 +127,35 @@ namespace Volas
                     bool left = plugin.Settings.GunLeftHand.Value;
                     bool nextLeft = GUILayout.Toggle(left, "Left-hand pointer");
                     if (nextLeft != left) plugin.Settings.GunLeftHand.Value = nextLeft;
+                    GUILayout.Label("GUNLIB VISUAL PRESETS", smallStyle);
+                    GUILayout.BeginHorizontal();
+                    if (GUILayout.Button("OCEAN", disabledStyle, GUILayout.Height(32f)))
+                    {
+                        plugin.Settings.AccentHue.Value = 0.52f;
+                        plugin.Settings.GunBeamStyle.Value = 0;
+                        plugin.Settings.GunReticleStyle.Value = 2;
+                        plugin.Settings.GunGlow.Value = true;
+                        plugin.Settings.GunRainbow.Value = false;
+                        plugin.Settings.GunBeamWidth.Value = 0.012f;
+                    }
+                    if (GUILayout.Button("NEON", disabledStyle, GUILayout.Height(32f)))
+                    {
+                        plugin.Settings.AccentHue.Value = 0.82f;
+                        plugin.Settings.GunBeamStyle.Value = 2;
+                        plugin.Settings.GunReticleStyle.Value = 3;
+                        plugin.Settings.GunGlow.Value = true;
+                        plugin.Settings.GunRainbow.Value = false;
+                        plugin.Settings.GunBeamWidth.Value = 0.018f;
+                    }
+                    if (GUILayout.Button("PRISM", disabledStyle, GUILayout.Height(32f)))
+                    {
+                        plugin.Settings.GunBeamStyle.Value = 1;
+                        plugin.Settings.GunReticleStyle.Value = 0;
+                        plugin.Settings.GunGlow.Value = true;
+                        plugin.Settings.GunRainbow.Value = true;
+                        plugin.Settings.GunBeamWidth.Value = 0.016f;
+                    }
+                    GUILayout.EndHorizontal();
                     GUILayout.Label("BEAM STYLE", smallStyle);
                     GUILayout.BeginHorizontal();
                     string[] beams = { "Straight", "Wave", "Spiral" };

@@ -52,6 +52,7 @@ namespace Volas
             FiredThisFrame = false;
             IsAiming = false;
             TriggerHeld = false;
+            Target = default(GunTarget);
 
             var node = plugin.Settings.GunLeftHand.Value ? XRNode.LeftHand : XRNode.RightHand;
             var controller = InputDevices.GetDeviceAtXRNode(node);
@@ -145,7 +146,7 @@ namespace Volas
         private void DrawPointer(Vector3 origin, GunTarget target)
         {
             EnsureVisuals();
-            if (beam == null || reticle == null)
+            if (beam == null || reticle == null || haloBeam == null || reticleCircle == null)
                 return;
             beam.gameObject.SetActive(true);
             reticle.SetActive(true);
@@ -221,7 +222,7 @@ namespace Volas
 
         private void EnsureVisuals()
         {
-            if (reticle != null && beam != null) return;
+            if (reticle != null && beam != null && haloBeam != null && reticleCircle != null) return;
             var shader = Shader.Find("Sprites/Default") ??
                          Shader.Find("Unlit/Color") ??
                          Shader.Find("Standard");
