@@ -48,6 +48,8 @@ namespace Volas
         private static readonly Color Violet = new Color(0.43f, 0.22f, 0.82f);
         private static readonly Color SearchSurface = new Color(0.070f, 0.059f, 0.105f, 0.70f);
         private GUIStyle textAccent;
+        private GUIStyle textTab;
+        private GUIStyle textTabActive;
 
         internal DesktopMenu(VolasPlugin owner)
         {
@@ -176,7 +178,7 @@ namespace Volas
             };
             float totalWidth = 3f;
             for (int i = 0; i < tabs.Length; i++)
-                totalWidth += Mathf.Max(44f, tabs[i].Length * 5.65f + 17f);
+                totalWidth += Mathf.Max(31f, tabs[i].Length * 4.5f + 11f);
 
             navigationScroll = GUI.BeginScrollView(area, navigationScroll,
                 new Rect(0f, 0f, Mathf.Max(totalWidth, area.width - 2f), 34f), false, false);
@@ -184,16 +186,16 @@ namespace Volas
             for (int i = 0; i < tabs.Length; i++)
             {
                 string tab = tabs[i];
-                float tabWidth = Mathf.Max(44f, tab.Length * 5.65f + 17f);
+                float tabWidth = Mathf.Max(31f, tab.Length * 4.5f + 11f);
                 bool active = page == tab && string.IsNullOrWhiteSpace(search);
                 if (GUI.Button(new Rect(x, 0f, tabWidth - 2f, 29f), "", noStyle))
                     Navigate(tab);
-                DrawText(new Rect(x + 7f, 7f, tabWidth - 10f, 20f),
-                    tab.ToLowerInvariant(), active ? textNormal : textDim);
+                DrawText(new Rect(x + 4f, 7f, tabWidth - 7f, 20f),
+                    tab.ToLowerInvariant(), active ? textTabActive : textTab);
                 if (active)
                 {
-                    targetX = x + 7f;
-                    targetWidth = tabWidth - 19f;
+                    targetX = x + 4f;
+                    targetWidth = tabWidth - 12f;
                 }
                 x += tabWidth;
             }
@@ -527,6 +529,8 @@ namespace Volas
             textBold = NewText(13, White, true);
             textTitle = NewText(14, Violet, true);
             textAccent = NewText(12, Violet, true);
+            textTab = NewText(9, Muted);
+            textTabActive = NewText(10, White, true);
             textMono = NewText(10, White, true);
             noStyle = new GUIStyle(GUIStyle.none);
             searchField = new GUIStyle(GUI.skin.textField);
