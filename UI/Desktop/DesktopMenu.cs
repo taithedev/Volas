@@ -4,309 +4,514 @@ using UnityEngine;
 
 namespace Volas
 {
+    /// <summary>
+    /// Desktop dashboard modeled after the supplied three-column reference:
+    /// wide glass-black surface, compact top tabs, search, favorites and enabled lists.
+    /// All controls call the same FeatureRegistry as the VR wrist menu.
+    /// </summary>
     internal sealed class DesktopMenu
     {
         private readonly VolasPlugin plugin;
-        private Rect window = new Rect(55f, 55f, 505f, 560f);
-        private Vector2 scroll;
-        private Vector2 categoryScroll;
-        private int selectedCategory;
-        private bool resizing;
+        private Rect window;
+        private Vector2 navigationScroll;
+        private Vector2 featureScroll;
+        private Vector2 rightScroll;
+        private string page = "Home";
         private string search = "";
-        private GUIStyle windowStyle;
-        private GUIStyle titleStyle;
-        private GUIStyle smallStyle;
-        private GUIStyle lineStyle;
-        private GUIStyle enabledStyle;
-        private GUIStyle disabledStyle;
-        private GUIStyle textStyle;
-        private Texture2D background;
-        private Texture2D row;
-        private Texture2D lit;
-        private Texture2D hover;
-        private Texture2D white;
+        private Feature selectedFeature;
+        private bool resizing;
+        private bool wasDragged;
+        private int lastScreenWidth;
+        private int lastScreenHeight;
+        private Texture2D whitePixel;
+        private Texture2D windowTexture;
+        private GUIStyle backgroundStyle;
+        private GUIStyle textSmall;
+        private GUIStyle textDim;
+        private GUIStyle textNormal;
+        private GUIStyle textBold;
+        private GUIStyle textTitle;
+        private GUIStyle textMono;
+        private GUIStyle searchField;
+        private GUIStyle noStyle;
+
+        private static readonly Color Ink = new Color(0.022f, 0.024f, 0.031f, 0.96f);
+        private static readonly Color Header = new Color(0.035f, 0.037f, 0.046f, 0.98f);
+        private static readonly Color Surface = new Color(0.052f, 0.056f, 0.068f, 0.90f);
+        private static readonly Color Hover = new Color(0.12f, 0.125f, 0.145f, 0.97f);
+        private static readonly Color Border = new Color(1f, 1f, 1f, 0.11f);
+        private static readonly Color Muted = new Color(0.59f, 0.60f, 0.64f);
+        private static readonly Color White = new Color(0.98f, 0.98f, 1f);
+        private static readonly Color Soft = new Color(0.82f, 0.83f, 0.86f);
 
         internal DesktopMenu(VolasPlugin owner)
         {
             plugin = owner;
             window = new Rect(
-                plugin.Settings.WindowX.Value,
-                plugin.Settings.WindowY.Value,
-                Mathf.Clamp(plugin.Settings.WindowWidth.Value, 390f, 980f),
-                Mathf.Clamp(plugin.Settings.WindowHeight.Value, 355f, 880f));
+                owner.Settings.WindowX.Value, owner.Settings.WindowY.Value,
+                Mathf.Max(770f, owner.Settings.WindowWidth.Value),
+                Mathf.Max(520f, owner.Settings.WindowHeight.Value));
         }
 
         internal void Draw()
         {
-            InitializeStyles();
+            EnsureStyles();
+            DrawTelemetry();
             if (plugin.Effects.DesktopCrosshair)
             {
-                Color previous = GUI.color;
-                GUI.color = plugin.Accent;
-                GUI.DrawTexture(new Rect(Screen.width * 0.5f - 1f, Screen.height * 0.5f - 9f, 2f, 18f), white);
-                GUI.DrawTexture(new Rect(Screen.width * 0.5f - 9f, Screen.height * 0.5f - 1f, 18f, 2f), white);
-                GUI.color = previous;
+                Fill(new Rect(Screen.width / 2f - 1, Screen.height / 2f - 9, 2, 18), White);
+                Fill(new Rect(Screen.width / 2f - 9, Screen.height / 2f - 1, 18, 2), White);
             }
 
-            DrawTelemetry();
             if (!plugin.DesktopOpen) return;
 
-            window.x = Mathf.Clamp(window.x, 0f, Mathf.Max(0f, Screen.width - 75f));
-            window.y = Mathf.Clamp(window.y, 0f, Mathf.Max(0f, Screen.height - 38f));
-            window = GUI.Window(289109, window, DrawWindow, "", windowStyle);
+            if (Screen.width != lastScreenWidth || Screen.height != lastScreenHeight)
+            {
+                lastScreenWidth = Screen.width;
+                lastScreenHeight = Screen.height;
+                window.width = Mathf.Min(window.width, Mathf.Max(550, Screen.width - 18));
+                window.height = Mathf.Min(window.height, Mathf.Max(360, Screen.height - 18));
+            }
+
+            window.x = Mathf.Clamp(window.x, 0f, Mathf.Max(0f, Screen.width - 90f));
+            window.y = Mathf.Clamp(window.y, 0f, Mathf.Max(0f, Screen.height - 42f));
+            window = GUI.Window(89273, window, WindowContents, "", backgroundStyle);
             if (Event.current.type == EventType.MouseUp) SaveWindow();
         }
 
-        private void DrawTelemetry()
+        private void WindowContents(int id)
         {
-            var effects = plugin.Effects;
-            var lines = new List<string>();
-            if (effects.FpsHud) lines.Add("FPS   " + plugin.FramesPerSecond.ToString("0"));
-            if (effects.ClockHud) lines.Add("TIME  " + DateTime.Now.ToString("HH:mm:ss"));
-            if (effects.PositionHud)
-            {
-                var p = plugin.Game.Position;
-                lines.Add("XYZ   " + p.x.ToString("0.0") + " / " + p.y.ToString("0.0") + " / " + p.z.ToString("0.0"));
-            }
-            if (effects.HeadingHud) lines.Add("YAW   " + plugin.Game.Heading.ToString("0") + " degrees");
-            if (lines.Count == 0) return;
+            float w = window.width;
+            float h = window.height;
+            Fill(new Rect(0f, 0f, w, 36f), Header);
+            Fill(new Rect(0f, 0f, w, 2f), White);
+            DrawText(new Rect(18f, 7f, 98f, 27f), "volas", textTitle);
+            DrawText(new Rect(110f, 11f, 104f, 21f), "v1.4  /  PC", textDim);
 
-            float height = 17f + lines.Count * 24f;
-            GUI.Box(new Rect(Screen.width - 310f, 18f, 295f, height), "", windowStyle);
-            for (int i = 0; i < lines.Count; i++)
-                GUI.Label(new Rect(Screen.width - 292f, 24f + i * 24f, 270f, 24f), lines[i], textStyle);
-        }
+            float rightSpace = 205f;
+            DrawText(new Rect(w - rightSpace - 23, 11, 20, 20), "⌕", textNormal);
+            search = GUI.TextField(new Rect(w - rightSpace, 6, 145, 25), search ?? "", searchField);
+            if (Button(new Rect(w - 57f, 6f, 26f, 24f), "SET", true))
+                Navigate("Settings");
+            if (Button(new Rect(w - 29f, 6f, 23f, 24f), "x", true))
+                plugin.DesktopOpen = false;
 
-        private void DrawWindow(int id)
-        {
-            Color savedColor = GUI.color;
-            GUI.color = plugin.Accent;
-            GUI.DrawTexture(new Rect(0f, 0f, window.width, 5f), white);
-            GUI.color = savedColor;
-            GUI.Label(new Rect(20f, 13f, 225f, 33f), "VOLAS", titleStyle);
-            GUI.Label(new Rect(window.width - 192f, 21f, 170f, 25f), "GTAG / BepInEx 5 / v1.3", smallStyle);
-            GUI.Label(new Rect(22f, 52f, window.width - 43f, 22f), plugin.Game.RoomSummary(), smallStyle);
+            Fill(new Rect(0, 37, w, 1), Border);
+            DrawNavigation(new Rect(16, 41, w - 32, 30));
+            Fill(new Rect(0, 74, w, 1), Border);
 
-            GUILayout.BeginArea(new Rect(16f, 82f, window.width - 32f, window.height - 143f));
-            var categories = plugin.Features.Categories;
-            if (categories.Count > 0)
-            {
-                selectedCategory = Mathf.Clamp(selectedCategory, 0, categories.Count - 1);
-                categoryScroll = GUILayout.BeginScrollView(categoryScroll, true, false,
-                    GUILayout.Height(44f));
-                GUILayout.BeginHorizontal();
-                for (int i = 0; i < categories.Count; i++)
-                {
-                    if (GUILayout.Button(categories[i], i == selectedCategory ? enabledStyle : disabledStyle,
-                        GUILayout.Height(34f), GUILayout.MinWidth(79f)))
-                        selectedCategory = i;
-                }
-                GUILayout.EndHorizontal();
-                GUILayout.EndScrollView();
-                GUILayout.Space(9f);
-                GUILayout.BeginHorizontal();
-                GUILayout.Label("SEARCH", smallStyle, GUILayout.Width(55f));
-                search = GUILayout.TextField(search ?? "", GUILayout.Height(26f));
-                if (GUILayout.Button("CLEAR", disabledStyle, GUILayout.Width(54f), GUILayout.Height(26f))) search = "";
-                GUILayout.EndHorizontal();
-                GUILayout.Space(5f);
-                if (categories[selectedCategory] == "Gun Mods")
-                {
-                    GUILayout.Label("GUNLIB  /  Right grip to aim, trigger to activate", smallStyle);
-                    GUILayout.Label("MAX RANGE   " + plugin.Settings.GunDistance.Value.ToString("0") + " m", smallStyle);
-                    float distance = GUILayout.HorizontalSlider(plugin.Settings.GunDistance.Value, 10f, 250f);
-                    if (Mathf.Abs(distance - plugin.Settings.GunDistance.Value) > 1f)
-                        plugin.Settings.GunDistance.Value = distance;
-                    GUILayout.Label("RETICLE DIAMETER  " + plugin.Settings.GunReticleSize.Value.ToString("0.00") + " m", smallStyle);
-                    float reticle = GUILayout.HorizontalSlider(plugin.Settings.GunReticleSize.Value, 0.025f, 0.2f);
-                    if (Mathf.Abs(reticle - plugin.Settings.GunReticleSize.Value) > 0.005f)
-                        plugin.Settings.GunReticleSize.Value = reticle;
-                    bool forward = plugin.Settings.GunUseForward.Value;
-                    bool nextForward = GUILayout.Toggle(forward, "Aim from controller forward axis");
-                    if (nextForward != forward) plugin.Settings.GunUseForward.Value = nextForward;
-                    bool left = plugin.Settings.GunLeftHand.Value;
-                    bool nextLeft = GUILayout.Toggle(left, "Left-hand pointer");
-                    if (nextLeft != left) plugin.Settings.GunLeftHand.Value = nextLeft;
-                    GUILayout.Label("GUNLIB VISUAL PRESETS", smallStyle);
-                    GUILayout.BeginHorizontal();
-                    if (GUILayout.Button("OCEAN", disabledStyle, GUILayout.Height(32f)))
-                    {
-                        plugin.Settings.AccentHue.Value = 0.52f;
-                        plugin.Settings.GunBeamStyle.Value = 0;
-                        plugin.Settings.GunReticleStyle.Value = 2;
-                        plugin.Settings.GunGlow.Value = true;
-                        plugin.Settings.GunRainbow.Value = false;
-                        plugin.Settings.GunBeamWidth.Value = 0.012f;
-                    }
-                    if (GUILayout.Button("NEON", disabledStyle, GUILayout.Height(32f)))
-                    {
-                        plugin.Settings.AccentHue.Value = 0.82f;
-                        plugin.Settings.GunBeamStyle.Value = 2;
-                        plugin.Settings.GunReticleStyle.Value = 3;
-                        plugin.Settings.GunGlow.Value = true;
-                        plugin.Settings.GunRainbow.Value = false;
-                        plugin.Settings.GunBeamWidth.Value = 0.018f;
-                    }
-                    if (GUILayout.Button("PRISM", disabledStyle, GUILayout.Height(32f)))
-                    {
-                        plugin.Settings.GunBeamStyle.Value = 1;
-                        plugin.Settings.GunReticleStyle.Value = 0;
-                        plugin.Settings.GunGlow.Value = true;
-                        plugin.Settings.GunRainbow.Value = true;
-                        plugin.Settings.GunBeamWidth.Value = 0.016f;
-                    }
-                    GUILayout.EndHorizontal();
-                    GUILayout.Label("BEAM STYLE", smallStyle);
-                    GUILayout.BeginHorizontal();
-                    string[] beams = { "Straight", "Wave", "Spiral" };
-                    for (int i = 0; i < beams.Length; i++)
-                        if (GUILayout.Button(beams[i], plugin.Settings.GunBeamStyle.Value == i ? enabledStyle : disabledStyle, GUILayout.Height(31f)))
-                            plugin.Settings.GunBeamStyle.Value = i;
-                    GUILayout.EndHorizontal();
-                    GUILayout.Label("RETICLE", smallStyle);
-                    GUILayout.BeginHorizontal();
-                    string[] shapes = { "Orb", "Block", "Ring", "Diamond" };
-                    for (int i = 0; i < shapes.Length; i++)
-                        if (GUILayout.Button(shapes[i], plugin.Settings.GunReticleStyle.Value == i ? enabledStyle : disabledStyle, GUILayout.Height(31f)))
-                            plugin.Settings.GunReticleStyle.Value = i;
-                    GUILayout.EndHorizontal();
-                    var settings = plugin.Settings;
-                    bool glow = GUILayout.Toggle(settings.GunGlow.Value, "Soft glow");
-                    bool rainbow = GUILayout.Toggle(settings.GunRainbow.Value, "Rainbow pointer");
-                    bool pulse = GUILayout.Toggle(settings.GunPulse.Value, "Pulse animation");
-                    if (settings.GunGlow.Value != glow) settings.GunGlow.Value = glow;
-                    if (settings.GunRainbow.Value != rainbow) settings.GunRainbow.Value = rainbow;
-                    if (settings.GunPulse.Value != pulse) settings.GunPulse.Value = pulse;
-                    GUILayout.Label("BEAM WIDTH " + settings.GunBeamWidth.Value.ToString("0.000") + " m", smallStyle);
-                    float width = GUILayout.HorizontalSlider(settings.GunBeamWidth.Value, 0.002f, 0.06f);
-                    if (Mathf.Abs(width - settings.GunBeamWidth.Value) > 0.001f) settings.GunBeamWidth.Value = width;
-                    GUILayout.Label("ANIMATION SPEED " + settings.GunAnimationSpeed.Value.ToString("0.0") + "x", smallStyle);
-                    float anim = GUILayout.HorizontalSlider(settings.GunAnimationSpeed.Value, 0.15f, 4f);
-                    if (Mathf.Abs(anim - settings.GunAnimationSpeed.Value) > 0.03f) settings.GunAnimationSpeed.Value = anim;
-                    GUILayout.Label("STAMP SIZE " + settings.GunMarkScale.Value.ToString("0.00") + "x", smallStyle);
-                    float markScale = GUILayout.HorizontalSlider(settings.GunMarkScale.Value, 0.5f, 2.5f);
-                    if (Mathf.Abs(markScale - settings.GunMarkScale.Value) > 0.025f) settings.GunMarkScale.Value = markScale;
-                    GUILayout.Label("STAMP LIFETIME " + settings.GunMarkLifetime.Value.ToString("0") + " s", smallStyle);
-                    float lifetime = GUILayout.HorizontalSlider(settings.GunMarkLifetime.Value, 3f, 120f);
-                    if (Mathf.Abs(lifetime - settings.GunMarkLifetime.Value) > 1f) settings.GunMarkLifetime.Value = lifetime;
-                }
-                if (categories[selectedCategory] == "Settings")
-                {
-                    GUILayout.Label("ACCENT COLOR", smallStyle);
-                    float hue = GUILayout.HorizontalSlider(plugin.Settings.AccentHue.Value, 0f, 1f);
-                    if (Mathf.Abs(hue - plugin.Settings.AccentHue.Value) > 0.005f)
-                        plugin.Settings.AccentHue.Value = hue;
-                    GUILayout.Label("VR MENU SCALE", smallStyle);
-                    float scale = GUILayout.HorizontalSlider(plugin.Settings.VrScale.Value, 0.65f, 1.30f);
-                    if (Mathf.Abs(scale - plugin.Settings.VrScale.Value) > 0.015f)
-                        plugin.Settings.VrScale.Value = scale;
-                }
-                scroll = GUILayout.BeginScrollView(scroll);
-                int visibleCount = 0;
-                foreach (var feature in plugin.Features.InCategory(categories[selectedCategory]))
-                {
-                    if (!string.IsNullOrWhiteSpace(search) &&
-                        feature.Label.IndexOf(search, StringComparison.OrdinalIgnoreCase) < 0 &&
-                        feature.Id.IndexOf(search, StringComparison.OrdinalIgnoreCase) < 0 &&
-                        feature.Description.IndexOf(search, StringComparison.OrdinalIgnoreCase) < 0)
-                        continue;
-                    visibleCount++;
-                    GUILayout.BeginHorizontal();
-                    string state = feature.ActionOnly ? "RUN" : feature.Enabled ? "ON" : "OFF";
-                    string label = feature.Label + "    /    " + state;
-                    GUIStyle style = feature.Enabled ? enabledStyle : lineStyle;
-                    if (GUILayout.Button(new GUIContent(label, feature.Description), style, GUILayout.Height(39f)))
-                        plugin.Features.Activate(feature);
-                    if (GUILayout.Button(plugin.Features.IsFavorite(feature) ? "★" : "☆",
-                        disabledStyle, GUILayout.Width(37f), GUILayout.Height(39f)))
-                        plugin.Features.ToggleFavorite(feature);
-                    GUILayout.EndHorizontal();
-                    GUILayout.Label(feature.Description, smallStyle, GUILayout.Height(25f));
-                    GUILayout.Space(3f);
-                }
-                if (visibleCount == 0)
-                    GUILayout.Label("No matching features. Search or favorite mods in another category.", smallStyle);
-                GUILayout.EndScrollView();
-            }
-            GUILayout.EndArea();
+            Rect body = new Rect(15, 85, w - 30, h - 118);
+            if (!string.IsNullOrWhiteSpace(search))
+                DrawCategoryView(body, "Search", SearchResults());
+            else if (page == "Home")
+                DrawHome(body);
+            else if (page == "Enabled")
+                DrawCategoryView(body, page, EnabledFeatures());
+            else
+                DrawCategoryView(body, page, plugin.Features.InCategory(page));
 
-            GUI.Label(new Rect(18f, window.height - 51f, window.width - 36f, 18f),
-                plugin.Features.LastMessage, smallStyle);
-            GUI.Label(new Rect(18f, window.height - 29f, window.width - 55f, 20f),
-                "F6 hide  |  End reset  |  Left Y VR menu", smallStyle);
-            GUI.Label(new Rect(window.width - 20f, window.height - 25f, 18f, 18f), "+", textStyle);
+            Fill(new Rect(0, h - 29, w, 1), Border);
+            DrawText(new Rect(16, h - 24, w - 176, 20),
+                plugin.Features.LastMessage, textDim);
+            DrawText(new Rect(w - 182, h - 24, 164, 20),
+                "F6 HIDE  /  END RESET", textDim);
+            Fill(new Rect(w - 16, h - 9, 11, 1), Soft);
+            Fill(new Rect(w - 11, h - 14, 1, 11), Soft);
 
-            var grip = new Rect(window.width - 31f, window.height - 32f, 31f, 32f);
-            var e = Event.current;
-            if (e.type == EventType.MouseDown && grip.Contains(e.mousePosition) && e.button == 0)
+            var grip = new Rect(w - 30f, h - 29f, 30f, 29f);
+            Event e = Event.current;
+            if (e.type == EventType.MouseDown && e.button == 0 && grip.Contains(e.mousePosition))
             {
                 resizing = true;
                 e.Use();
             }
             if (e.type == EventType.MouseDrag && resizing)
             {
-                window.width = Mathf.Clamp(window.width + e.delta.x, 390f, 980f);
-                window.height = Mathf.Clamp(window.height + e.delta.y, 355f, 880f);
+                window.width = Mathf.Clamp(window.width + e.delta.x, 550f, Mathf.Max(550, Screen.width - 12));
+                window.height = Mathf.Clamp(window.height + e.delta.y, 360f, Mathf.Max(360, Screen.height - 12));
                 e.Use();
             }
             if (e.type == EventType.MouseUp)
                 resizing = false;
-            GUI.DragWindow(new Rect(0f, 0f, window.width - 34f, 45f));
+
+            GUI.DragWindow(new Rect(0, 0, w - 230f, 36f));
         }
 
-        private void SaveWindow()
+        private void DrawNavigation(Rect area)
         {
-            if (Mathf.Abs(plugin.Settings.WindowX.Value - window.x) > 0.5f)
-                plugin.Settings.WindowX.Value = window.x;
-            if (Mathf.Abs(plugin.Settings.WindowY.Value - window.y) > 0.5f)
-                plugin.Settings.WindowY.Value = window.y;
-            if (Mathf.Abs(plugin.Settings.WindowWidth.Value - window.width) > 0.5f)
-                plugin.Settings.WindowWidth.Value = window.width;
-            if (Mathf.Abs(plugin.Settings.WindowHeight.Value - window.height) > 0.5f)
-                plugin.Settings.WindowHeight.Value = window.height;
+            var tabs = new List<string> { "Home", "All", "Favorites", "Enabled" };
+            foreach (string name in plugin.Features.Categories)
+                if (!tabs.Contains(name)) tabs.Add(name);
+            float total = 6;
+            foreach (var tab in tabs) total += Mathf.Max(61f, tab.Length * 7.1f + 24f);
+
+            navigationScroll = GUI.BeginScrollView(area, navigationScroll,
+                new Rect(0, 0, Mathf.Max(total, area.width - 2), 29), false, false);
+            float x = 0;
+            foreach (string tab in tabs)
+            {
+                float width = Mathf.Max(61f, tab.Length * 7.1f + 24f);
+                bool active = string.IsNullOrEmpty(search) && page == tab;
+                if (GUI.Button(new Rect(x, 0, width - 5, 26), tab.ToLowerInvariant(), noStyle))
+                    Navigate(tab);
+                DrawText(new Rect(x + 7, 1, width - 10, 21), tab.ToLowerInvariant(),
+                    active ? textBold : textDim);
+                if (active) Fill(new Rect(x + 7, 27, width - 19, 2), White);
+                x += width;
+            }
+            GUI.EndScrollView();
         }
 
-        private void InitializeStyles()
+        private void DrawHome(Rect area)
         {
-            if (windowStyle != null) return;
-            background = Pixel(new Color(0.025f, 0.03f, 0.04f, 0.98f));
-            row = Pixel(new Color(0.075f, 0.09f, 0.12f));
-            lit = Pixel(new Color(0.085f, 0.20f, 0.24f));
-            hover = Pixel(new Color(0.15f, 0.21f, 0.27f));
-            white = Pixel(Color.white);
+            DrawText(new Rect(area.x + 5, area.y - 2, 400, 29), "Home", textBold);
+            DrawText(new Rect(area.x + 5, area.y + 27, 500, 23),
+                "Your Volas dashboard. Choose a category or toggle a saved mod.", textDim);
 
-            windowStyle = new GUIStyle(GUI.skin.box);
-            windowStyle.normal.background = background;
-            windowStyle.border = new RectOffset(1, 1, 1, 1);
-            windowStyle.padding = new RectOffset(0, 0, 0, 0);
+            float top = area.y + 60f;
+            float gap = 10;
+            float colWidth = (area.width - gap * 2f) / 3f;
+            Rect left = new Rect(area.x, top, colWidth, area.height - 63);
+            Rect middle = new Rect(area.x + colWidth + gap, top, colWidth, area.height - 63);
+            Rect right = new Rect(area.x + 2f * (colWidth + gap), top, colWidth, area.height - 63);
+            Panel(left);
+            Panel(middle);
+            Panel(right);
 
-            titleStyle = new GUIStyle(GUI.skin.label);
-            titleStyle.normal.textColor = Color.white;
-            titleStyle.fontSize = 26;
-            titleStyle.fontStyle = FontStyle.Bold;
+            ColumnTitle(left, "CATEGORIES", plugin.Features.Categories.Count.ToString());
+            float y = left.y + 43;
+            foreach (string name in plugin.Features.Categories)
+            {
+                if (name == "All" || name == "Favorites") continue;
+                if (y + 34 > left.yMax - 5) break;
+                if (HomeRow(new Rect(left.x + 8, y, left.width - 16, 34), name, ">"))
+                    Navigate(name);
+                y += 43;
+            }
 
-            smallStyle = new GUIStyle(GUI.skin.label);
-            smallStyle.fontSize = 11;
-            smallStyle.normal.textColor = new Color(0.65f, 0.72f, 0.76f);
-            smallStyle.clipping = TextClipping.Clip;
+            var favorites = plugin.Features.InCategory("Favorites");
+            ColumnTitle(middle, "FAVORITES", favorites.Count.ToString());
+            y = middle.y + 43;
+            if (favorites.Count == 0)
+            {
+                DrawText(new Rect(middle.x + 15, y + 8, middle.width - 30, 48),
+                    "Star mods to pin them here.", textDim);
+            }
+            foreach (var f in favorites)
+            {
+                if (y + 34 > middle.yMax - 5) break;
+                if (HomeRow(new Rect(middle.x + 8, y, middle.width - 16, 34),
+                    f.Label, f.Enabled ? "ON" : "OFF"))
+                    plugin.Features.Activate(f);
+                y += 43;
+            }
 
-            textStyle = new GUIStyle(GUI.skin.label);
-            textStyle.fontSize = 13;
-            textStyle.normal.textColor = Color.white;
+            var enabled = EnabledFeatures();
+            ColumnTitle(right, "ENABLED", enabled.Count.ToString());
+            y = right.y + 43;
+            if (enabled.Count == 0)
+            {
+                DrawText(new Rect(right.x + 15, y + 8, right.width - 30, 48),
+                    "No active mods.", textDim);
+            }
+            foreach (var f in enabled)
+            {
+                if (y + 34 > right.yMax - 5) break;
+                if (HomeRow(new Rect(right.x + 8, y, right.width - 16, 34),
+                    f.Label, "ON"))
+                    plugin.Features.Activate(f);
+                y += 43;
+            }
 
-            lineStyle = new GUIStyle(GUI.skin.button);
-            lineStyle.normal.background = row;
-            lineStyle.hover.background = hover;
-            lineStyle.active.background = lit;
-            lineStyle.normal.textColor = Color.white;
-            lineStyle.hover.textColor = Color.white;
-            lineStyle.fontSize = 13;
-            lineStyle.alignment = TextAnchor.MiddleLeft;
-            lineStyle.padding = new RectOffset(13, 8, 5, 5);
+            if (GUI.Button(new Rect(right.x + 8, right.yMax - 46, right.width - 16, 31),
+                "DISABLE ALL", noStyle))
+                plugin.Features.DisableAll();
+            DrawText(new Rect(right.x + 17, right.yMax - 43, right.width - 34, 24),
+                "DISABLE ALL", textSmall);
+        }
 
-            enabledStyle = new GUIStyle(lineStyle);
-            enabledStyle.normal.background = lit;
-            enabledStyle.normal.textColor = new Color(0.47f, 0.94f, 1f);
+        private void DrawCategoryView(Rect area, string category, List<Feature> features)
+        {
+            if (selectedFeature == null || !features.Contains(selectedFeature))
+                selectedFeature = features.Count > 0 ? features[0] : null;
+
+            DrawText(new Rect(area.x + 4, area.y - 2, area.width - 10, 30),
+                category == "Search" ? "Search results" : category, textBold);
+            DrawText(new Rect(area.x + 4, area.y + 27, area.width - 10, 21),
+                features.Count + " available  /  click a mod to toggle it", textDim);
+
+            float top = area.y + 57;
+            float gap = 12;
+            float leftWidth = area.width * 0.61f;
+            Rect list = new Rect(area.x, top, leftWidth, area.height - 58);
+            Rect details = new Rect(list.xMax + gap, top, area.width - leftWidth - gap, area.height - 58);
+            Panel(list);
+            Panel(details);
+            ColumnTitle(list, "MODS", features.Count.ToString());
+            ColumnTitle(details, "DETAILS", "VOLAS");
+
+            float rowHeight = 69f;
+            Rect listViewport = new Rect(list.x + 7, list.y + 37, list.width - 14, list.height - 44);
+            featureScroll = GUI.BeginScrollView(listViewport, featureScroll,
+                new Rect(0, 0, listViewport.width - 16, Mathf.Max(listViewport.height, features.Count * rowHeight + 3)));
+            float rowWidth = Mathf.Max(220, listViewport.width - 18);
+            for (int i = 0; i < features.Count; i++)
+            {
+                var f = features[i];
+                float y = i * rowHeight + 2;
+                Rect row = new Rect(2, y, rowWidth - 7, 61);
+                Fill(row, f.Enabled ? new Color(0.14f, 0.145f, 0.16f, 0.88f) : Surface);
+                if (GUI.Button(new Rect(row.x, row.y, row.width - 83, row.height), "", noStyle))
+                {
+                    selectedFeature = f;
+                    plugin.Features.Activate(f);
+                }
+                DrawText(new Rect(row.x + 11, y + 6, row.width - 99, 21), f.Label, textNormal);
+                DrawText(new Rect(row.x + 11, y + 30, row.width - 101, 22),
+                    ClipText(f.Description, 51), textDim);
+                if (GUI.Button(new Rect(row.xMax - 76, y + 9, 30, 43), "", noStyle))
+                    plugin.Features.ToggleFavorite(f);
+                DrawText(new Rect(row.xMax - 69, y + 13, 28, 20),
+                    plugin.Features.IsFavorite(f) ? "*" : "+", textBold);
+                if (GUI.Button(new Rect(row.xMax - 42, y + 8, 37, 44), "", noStyle))
+                {
+                    selectedFeature = f;
+                    plugin.Features.Activate(f);
+                }
+                Fill(new Rect(row.xMax - 41, y + 19, 33, 22),
+                    f.Enabled ? White : new Color(0.19f, 0.20f, 0.22f, 1f));
+                DrawText(new Rect(row.xMax - 38, y + 18, 32, 24),
+                    f.ActionOnly ? "GO" : f.Enabled ? "ON" : "OFF",
+                    f.Enabled ? textMono : textSmall);
+            }
+            GUI.EndScrollView();
+            DrawDetails(details, category);
+        }
+
+        private void DrawDetails(Rect box, string category)
+        {
+            Rect area = new Rect(box.x + 13, box.y + 43, box.width - 26, box.height - 55);
+            rightScroll = GUI.BeginScrollView(area, rightScroll,
+                new Rect(0, 0, area.width - 15, 850));
+            float w = Mathf.Max(130, area.width - 18);
+            float y = 0;
+            if (selectedFeature != null)
+            {
+                DrawText(new Rect(0, y, w, 28), selectedFeature.Label, textBold); y += 30;
+                DrawText(new Rect(0, y, w, 44), selectedFeature.Description, textSmall); y += 50;
+                DrawText(new Rect(0, y, w, 23),
+                    "STATUS  " + (selectedFeature.Enabled ? "ENABLED" : "DISABLED"), textDim); y += 30;
+                if (ClickLabel(new Rect(0, y, w, 34),
+                    selectedFeature.ActionOnly ? "RUN FEATURE" :
+                    selectedFeature.Enabled ? "DISABLE FEATURE" : "ENABLE FEATURE", true))
+                    plugin.Features.Activate(selectedFeature);
+                y += 43;
+            }
+            if (category == "Gun Mods" || category == "Settings")
+            {
+                DrawText(new Rect(0, y, w, 23), "APPEARANCE & CONTROLS", textSmall); y += 26;
+                if (category == "Gun Mods")
+                {
+                    y = SettingsSlider(y, w, "POINTER RANGE", 10f, 250f,
+                        plugin.Settings.GunDistance.Value, v => plugin.Settings.GunDistance.Value = v);
+                    y = SettingsSlider(y, w, "BEAM WIDTH", 0.002f, 0.06f,
+                        plugin.Settings.GunBeamWidth.Value, v => plugin.Settings.GunBeamWidth.Value = v);
+                    y = SettingsSlider(y, w, "RETICLE SIZE", 0.025f, 0.20f,
+                        plugin.Settings.GunReticleSize.Value, v => plugin.Settings.GunReticleSize.Value = v);
+                    y = SettingsSlider(y, w, "STAMP SIZE", 0.5f, 2.5f,
+                        plugin.Settings.GunMarkScale.Value, v => plugin.Settings.GunMarkScale.Value = v);
+                    y = SettingsSlider(y, w, "STAMP LIFETIME", 3f, 120f,
+                        plugin.Settings.GunMarkLifetime.Value, v => plugin.Settings.GunMarkLifetime.Value = v);
+                    DrawText(new Rect(0, y, w, 22), "BEAM STYLE", textDim); y += 22;
+                    y = Options(y, w, new [] { "LINE", "WAVE", "SPIRAL" },
+                        plugin.Settings.GunBeamStyle.Value, v => plugin.Settings.GunBeamStyle.Value = v);
+                    DrawText(new Rect(0, y, w, 22), "RETICLE", textDim); y += 22;
+                    y = Options(y, w, new [] { "ORB", "BOX", "RING", "GEM" },
+                        plugin.Settings.GunReticleStyle.Value, v => plugin.Settings.GunReticleStyle.Value = v);
+                    y = Toggle(y, w, "BEAM GLOW", plugin.Settings.GunGlow.Value,
+                        v => plugin.Settings.GunGlow.Value = v);
+                    y = Toggle(y, w, "PULSE", plugin.Settings.GunPulse.Value,
+                        v => plugin.Settings.GunPulse.Value = v);
+                    y = Toggle(y, w, "RAINBOW GUN", plugin.Settings.GunRainbow.Value,
+                        v => plugin.Settings.GunRainbow.Value = v);
+                    y = Toggle(y, w, "LEFT HAND", plugin.Settings.GunLeftHand.Value,
+                        v => plugin.Settings.GunLeftHand.Value = v);
+                    y = Toggle(y, w, "FORWARD AIM", plugin.Settings.GunUseForward.Value,
+                        v => plugin.Settings.GunUseForward.Value = v);
+                }
+                else
+                {
+                    y = SettingsSlider(y, w, "VR SIZE", 0.65f, 1.3f,
+                        plugin.Settings.VrScale.Value, v => plugin.Settings.VrScale.Value = v);
+                    y = Toggle(y, w, "COMPACT VR", plugin.Compact, v => plugin.Compact = v);
+                    y = Toggle(y, w, "RAINBOW EFFECTS", plugin.RainbowTheme,
+                        v => plugin.RainbowTheme = v);
+                }
+            }
+            GUI.EndScrollView();
+        }
+
+        private float Options(float y, float w, string[] values, int selected, Action<int> onChange)
+        {
+            float segment = w / values.Length;
+            for (int i = 0; i < values.Length; i++)
+            {
+                int item = i;
+                Rect rect = new Rect(segment * i + 1f, y, segment - 3, 29);
+                Fill(rect, selected == item ? White : Surface);
+                if (GUI.Button(rect, "", noStyle)) onChange(item);
+                DrawText(new Rect(rect.x + 4, y + 4, rect.width - 8, 22), values[i],
+                    selected == item ? textMono : textSmall);
+            }
+            return y + 39;
+        }
+
+        private float SettingsSlider(float y, float w, string name, float min, float max,
+            float current, Action<float> onChange)
+        {
+            DrawText(new Rect(0, y, w, 24), name + "   " + current.ToString("0.00"), textDim);
+            float v = GUI.HorizontalSlider(new Rect(4, y + 30, w - 12, 17), current, min, max);
+            if (Mathf.Abs(v - current) > (max - min) * 0.001f) onChange(v);
+            return y + 62;
+        }
+
+        private float Toggle(float y, float w, string label, bool value, Action<bool> onChange)
+        {
+            Rect rect = new Rect(0, y, w, 31);
+            Fill(rect, Surface);
+            if (GUI.Button(rect, "", noStyle)) onChange(!value);
+            DrawText(new Rect(8, y + 4, w - 67, 22), label, textSmall);
+            Fill(new Rect(w - 43, y + 7, 34, 17), value ? White : Hover);
+            DrawText(new Rect(w - 40, y + 5, 35, 22), value ? "ON" : "OFF",
+                value ? textMono : textSmall);
+            return y + 38;
+        }
+
+        private List<Feature> SearchResults()
+        {
+            string term = search.Trim();
+            return plugin.Features.All.FindAll(f =>
+                f.Label.IndexOf(term, StringComparison.OrdinalIgnoreCase) >= 0 ||
+                f.Id.IndexOf(term, StringComparison.OrdinalIgnoreCase) >= 0 ||
+                f.Category.IndexOf(term, StringComparison.OrdinalIgnoreCase) >= 0 ||
+                f.Description.IndexOf(term, StringComparison.OrdinalIgnoreCase) >= 0);
+        }
+
+        private List<Feature> EnabledFeatures()
+        {
+            return plugin.Features.All.FindAll(f => f.Enabled);
+        }
+
+        private void Navigate(string name)
+        {
+            page = name;
+            search = "";
+            featureScroll = Vector2.zero;
+            rightScroll = Vector2.zero;
+            selectedFeature = null;
+        }
+
+        private void Panel(Rect area)
+        {
+            Fill(area, Surface);
+            Fill(new Rect(area.x, area.y, area.width, 1), Border);
+            Fill(new Rect(area.x, area.yMax - 1, area.width, 1), Border);
+        }
+
+        private void ColumnTitle(Rect area, string title, string number)
+        {
+            DrawText(new Rect(area.x + 13, area.y + 11, area.width - 90, 22), title, textSmall);
+            DrawText(new Rect(area.xMax - 51, area.y + 11, 41, 22), number, textDim);
+            Fill(new Rect(area.x + 10, area.y + 34, area.width - 20, 1), Border);
+        }
+
+        private bool HomeRow(Rect rect, string label, string status)
+        {
+            Vector2 mouse = Event.current.mousePosition;
+            Fill(rect, rect.Contains(mouse) ? Hover : new Color(0.07f, 0.075f, 0.087f, 0.80f));
+            bool clicked = GUI.Button(rect, "", noStyle);
+            DrawText(new Rect(rect.x + 9, rect.y + 7, rect.width - 47, 23),
+                ClipText(label, Mathf.Max(10, (int)((rect.width - 55) / 8))), textSmall);
+            DrawText(new Rect(rect.xMax - 41, rect.y + 7, 39, 23), status, textDim);
+            return clicked;
+        }
+
+        private bool Button(Rect rect, string label, bool subtle)
+        {
+            Fill(rect, subtle ? Surface : White);
+            bool click = GUI.Button(rect, "", noStyle);
+            DrawText(new Rect(rect.x + 3, rect.y + 2, rect.width - 5, rect.height - 2), label, textSmall);
+            return click;
+        }
+
+        private bool ClickLabel(Rect rect, string label, bool solid)
+        {
+            Fill(rect, solid ? White : Surface);
+            bool clicked = GUI.Button(rect, "", noStyle);
+            DrawText(new Rect(rect.x + 12, rect.y + 7, rect.width - 24, 22),
+                label, solid ? textMono : textSmall);
+            return clicked;
+        }
+
+        private static string ClipText(string value, int max)
+        {
+            if (string.IsNullOrEmpty(value)) return "";
+            return value.Length > max ? value.Substring(0, Mathf.Max(2, max - 3)) + "..." : value;
+        }
+
+        private void DrawTelemetry()
+        {
+            var lines = new List<string>();
+            if (plugin.Effects.FpsHud) lines.Add("FPS  " + plugin.FramesPerSecond.ToString("0"));
+            if (plugin.Effects.ClockHud) lines.Add("TIME " + DateTime.Now.ToString("HH:mm:ss"));
+            if (plugin.Effects.PositionHud)
+            {
+                var pos = plugin.Game.Position;
+                lines.Add("XYZ " + pos.x.ToString("0.0") + " " + pos.y.ToString("0.0") + " " + pos.z.ToString("0.0"));
+            }
+            if (plugin.Effects.HeadingHud) lines.Add("YAW " + plugin.Game.Heading.ToString("0"));
+            if (lines.Count == 0) return;
+            Rect card = new Rect(Mathf.Max(0, Screen.width - 239), 12, 226, lines.Count * 22 + 14);
+            Fill(card, Ink);
+            for (int i = 0; i < lines.Count; i++)
+                DrawText(new Rect(card.x + 9, card.y + 6 + i * 22, card.width - 16, 20),
+                    lines[i], textSmall);
+        }
+
+        private void EnsureStyles()
+        {
+            if (whitePixel != null) return;
+            whitePixel = Pixel(Color.white);
+            windowTexture = Pixel(Ink);
+            backgroundStyle = new GUIStyle(GUI.skin.window);
+            backgroundStyle.normal.background = windowTexture;
+            backgroundStyle.border = new RectOffset(0, 0, 0, 0);
+            backgroundStyle.padding = new RectOffset(0, 0, 0, 0);
+            textSmall = NewText(11, Soft);
+            textDim = NewText(11, Muted);
+            textNormal = NewText(13, White);
+            textBold = NewText(15, White, true);
+            textTitle = NewText(21, White, true);
+            textMono = NewText(11, Color.black, true);
+            noStyle = new GUIStyle(GUIStyle.none);
+            searchField = new GUIStyle(GUI.skin.textField);
+            searchField.fontSize = 12;
+            searchField.normal.textColor = White;
+            searchField.focused.textColor = White;
+            searchField.normal.background = Pixel(new Color(0.09f, 0.095f, 0.11f, 1f));
+            searchField.focused.background = searchField.normal.background;
+            searchField.padding = new RectOffset(8, 7, 4, 4);
+        }
+
+        private static GUIStyle NewText(int size, Color color, bool bold = false)
+        {
+            var style = new GUIStyle(GUI.skin.label);
+            style.fontSize = size;
+            style.fontStyle = bold ? FontStyle.Bold : FontStyle.Normal;
+            style.normal.textColor = color;
+            style.clipping = TextClipping.Clip;
+            style.wordWrap = false;
+            return style;
         }
 
         private static Texture2D Pixel(Color color)
@@ -317,13 +522,40 @@ namespace Volas
             return texture;
         }
 
+        private void Fill(Rect rect, Color color)
+        {
+            Color before = GUI.color;
+            GUI.color = color;
+            GUI.DrawTexture(rect, whitePixel);
+            GUI.color = before;
+        }
+
+        private static void DrawText(Rect rect, string value, GUIStyle style)
+        {
+            GUI.Label(rect, value ?? "", style);
+        }
+
+        private void SaveWindow()
+        {
+            if (Mathf.Abs(plugin.Settings.WindowX.Value - window.x) > 1f)
+                plugin.Settings.WindowX.Value = window.x;
+            if (Mathf.Abs(plugin.Settings.WindowY.Value - window.y) > 1f)
+                plugin.Settings.WindowY.Value = window.y;
+            if (Mathf.Abs(plugin.Settings.WindowWidth.Value - window.width) > 1f)
+                plugin.Settings.WindowWidth.Value = window.width;
+            if (Mathf.Abs(plugin.Settings.WindowHeight.Value - window.height) > 1f)
+                plugin.Settings.WindowHeight.Value = window.height;
+        }
+
         internal void Dispose()
         {
-            if (background != null) UnityEngine.Object.Destroy(background);
-            if (row != null) UnityEngine.Object.Destroy(row);
-            if (lit != null) UnityEngine.Object.Destroy(lit);
-            if (hover != null) UnityEngine.Object.Destroy(hover);
-            if (white != null) UnityEngine.Object.Destroy(white);
+            if (whitePixel != null) UnityEngine.Object.Destroy(whitePixel);
+            if (windowTexture != null) UnityEngine.Object.Destroy(windowTexture);
+            if (searchField != null && searchField.normal.background != null &&
+                searchField.normal.background != whitePixel)
+                UnityEngine.Object.Destroy(searchField.normal.background);
+            whitePixel = null;
+            windowTexture = null;
         }
     }
 }
