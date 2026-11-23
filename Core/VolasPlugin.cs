@@ -100,7 +100,7 @@ namespace Volas
             lastVrButton = vrPressed;
 
             Features.Tick();
-            Gun.Tick(Guns.AnyEnabled || CreativeGun.AnyEnabled);
+            Gun.Tick(!VrOpen && (Guns.AnyEnabled || CreativeGun.AnyEnabled));
             Guns.Tick();
             CreativeGun.Tick();
             Movement.Tick();

@@ -12,6 +12,7 @@ namespace Volas
         internal readonly ConfigEntry<bool> RainbowAccent;
         internal readonly ConfigEntry<float> AccentHue;
         internal readonly ConfigEntry<float> VrScale;
+        internal readonly ConfigEntry<float> DesktopOpacity;
         internal readonly ConfigEntry<float> VrOffsetX;
         internal readonly ConfigEntry<float> VrOffsetY;
         internal readonly ConfigEntry<float> VrOffsetZ;
@@ -49,6 +50,9 @@ namespace Volas
             AccentHue = config.Bind("Appearance", "Accent hue", 0.52f,
                 new ConfigDescription("Static accent hue (0 to 1).",
                     new AcceptableValueRange<float>(0f, 1f)));
+            DesktopOpacity = config.Bind("Appearance", "Desktop opacity", 0.91f,
+                new ConfigDescription("Black glass background opacity.",
+                    new AcceptableValueRange<float>(0.72f, 1f)));
             VrScale = config.Bind("Appearance", "VR menu scale", 1f,
                 new ConfigDescription("Physical VR menu size multiplier.",
                     new AcceptableValueRange<float>(0.65f, 1.30f)));

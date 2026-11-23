@@ -19,6 +19,7 @@ namespace Volas
         private bool firstMeasurePoint;
         private Vector3 measureStart;
         private bool grappleLocked;
+        private bool hadActiveEffects;
         private Vector3 grapplePoint;
 
         internal bool Marker;
@@ -117,9 +118,11 @@ namespace Volas
 
             if (!AnyEnabled)
             {
-                Reset();
+                if (hadActiveEffects) Reset();
+                hadActiveEffects = false;
                 return;
             }
+            hadActiveEffects = true;
 
             var gun = plugin.Gun;
             var target = gun.Target;
@@ -411,6 +414,7 @@ namespace Volas
 
         internal void Reset()
         {
+            hadActiveEffects = false;
             foreach (var obj in objects) DestroyTransient(obj);
             objects.Clear();
             pulses.Clear();

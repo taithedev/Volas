@@ -214,7 +214,8 @@ namespace Volas
             }
             buttons.Clear();
             hoveredButton = -1;
-            lastPressedButton = -1;
+            // Keep lastPressedButton latched across page rebuilds so touching
+            // NEXT does not automatically press it again while the hand stays there.
 
             var categories = plugin.Features.Categories;
             if (categories.Count == 0) return;

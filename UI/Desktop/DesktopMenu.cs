@@ -20,7 +20,9 @@ namespace Volas
         private string search = "";
         private Feature selectedFeature;
         private bool resizing;
-        private bool wasDragged;
+        private float underlineX = -1f;
+        private float underlineWidth = 42f;
+        private float lastAppliedOpacity = -1f;
         private int lastScreenWidth;
         private int lastScreenHeight;
         private Texture2D whitePixel;
@@ -56,6 +58,7 @@ namespace Volas
         internal void Draw()
         {
             EnsureStyles();
+            UpdateOpacity();
             DrawTelemetry();
             if (plugin.Effects.DesktopCrosshair)
             {
@@ -148,6 +151,8 @@ namespace Volas
             navigationScroll = GUI.BeginScrollView(area, navigationScroll,
                 new Rect(0, 0, Mathf.Max(total, area.width - 2), 29), false, false);
             float x = 0;
+            float targetX = 0;
+            float targetWidth = 48;
             foreach (string tab in tabs)
             {
                 float width = Mathf.Max(61f, tab.Length * 7.1f + 24f);
@@ -156,9 +161,19 @@ namespace Volas
                     Navigate(tab);
                 DrawText(new Rect(x + 7, 1, width - 10, 21), tab.ToLowerInvariant(),
                     active ? textBold : textDim);
-                if (active) Fill(new Rect(x + 7, 27, width - 19, 2), White);
+                if (active)
+                {
+                    targetX = x + 7;
+                    targetWidth = width - 19;
+                }
                 x += width;
             }
+            float blend = Mathf.Clamp01(Time.unscaledDeltaTime * 13f);
+            if (underlineX < 0f) { underlineX = targetX; underlineWidth = targetWidth; }
+            underlineX = Mathf.Lerp(underlineX, targetX, blend);
+            underlineWidth = Mathf.Lerp(underlineWidth, targetWidth, blend);
+            if (string.IsNullOrWhiteSpace(search))
+                Fill(new Rect(underlineX, 27, underlineWidth, 2), White);
             GUI.EndScrollView();
         }
 
@@ -341,6 +356,8 @@ namespace Volas
                 }
                 else
                 {
+                    y = SettingsSlider(y, w, "PANEL OPACITY", 0.72f, 1f,
+                        plugin.Settings.DesktopOpacity.Value, v => plugin.Settings.DesktopOpacity.Value = v);
                     y = SettingsSlider(y, w, "VR SIZE", 0.65f, 1.3f,
                         plugin.Settings.VrScale.Value, v => plugin.Settings.VrScale.Value = v);
                     y = SettingsSlider(y, w, "WRIST LEFT/RIGHT", -0.24f, 0.24f,
@@ -539,6 +556,15 @@ namespace Volas
         private static void DrawText(Rect rect, string value, GUIStyle style)
         {
             GUI.Label(rect, value ?? "", style);
+        }
+
+        private void UpdateOpacity()
+        {
+            float value = plugin.Settings.DesktopOpacity.Value;
+            if (Mathf.Abs(value - lastAppliedOpacity) < 0.004f) return;
+            lastAppliedOpacity = value;
+            windowTexture.SetPixel(0, 0, new Color(0.022f, 0.024f, 0.031f, value));
+            windowTexture.Apply();
         }
 
         private void SaveWindow()
