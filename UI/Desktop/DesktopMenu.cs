@@ -75,8 +75,8 @@ namespace Volas
             {
                 lastScreenWidth = Screen.width;
                 lastScreenHeight = Screen.height;
-                window.width = Mathf.Min(window.width, Mathf.Max(550, Screen.width - 18));
-                window.height = Mathf.Min(window.height, Mathf.Max(360, Screen.height - 18));
+                window.width = Mathf.Min(window.width, Mathf.Max(630, Screen.width - 18));
+                window.height = Mathf.Min(window.height, Mathf.Max(420, Screen.height - 18));
             }
 
             window.x = Mathf.Clamp(window.x, 0f, Mathf.Max(0f, Screen.width - 90f));
@@ -242,57 +242,74 @@ namespace Volas
             if (selectedFeature == null || !features.Contains(selectedFeature))
                 selectedFeature = features.Count > 0 ? features[0] : null;
 
-            DrawText(new Rect(area.x + 4, area.y - 2, area.width - 10, 30),
-                category == "Search" ? "Search results" : category, textBold);
-            DrawText(new Rect(area.x + 4, area.y + 27, area.width - 10, 21),
-                features.Count + " available  /  click a mod to toggle it", textDim);
+            DrawText(new Rect(area.x + 4f, area.y + 2f, area.width - 100f, 24f),
+                category, textBold);
+            DrawText(new Rect(area.xMax - 82f, area.y + 5f, 76f, 18f),
+                features.Count + " mods", textDim);
 
-            float top = area.y + 57;
-            float gap = 12;
-            float leftWidth = area.width * 0.61f;
-            Rect list = new Rect(area.x, top, leftWidth, area.height - 58);
-            Rect details = new Rect(list.xMax + gap, top, area.width - leftWidth - gap, area.height - 58);
+            float top = area.y + 33f;
+            float gap = 11f;
+            float leftWidth = Mathf.Max(260f, area.width * 0.60f);
+            Rect list = new Rect(area.x, top, leftWidth, area.height - 36f);
+            Rect details = new Rect(list.xMax + gap, top,
+                Mathf.Max(180f, area.width - leftWidth - gap), area.height - 36f);
             Panel(list);
             Panel(details);
             ColumnTitle(list, "MODS", features.Count.ToString());
             ColumnTitle(details, "DETAILS", "VOLAS");
 
-            float rowHeight = 69f;
-            Rect listViewport = new Rect(list.x + 7, list.y + 37, list.width - 14, list.height - 44);
-            featureScroll = GUI.BeginScrollView(listViewport, featureScroll,
-                new Rect(0, 0, listViewport.width - 16, Mathf.Max(listViewport.height, features.Count * rowHeight + 3)));
-            float rowWidth = Mathf.Max(220, listViewport.width - 18);
+            const float rowHeight = 55f;
+            Rect viewport = new Rect(list.x + 8f, list.y + 39f,
+                list.width - 16f, list.height - 45f);
+            featureScroll = GUI.BeginScrollView(viewport, featureScroll,
+                new Rect(0f, 0f, Mathf.Max(100f, viewport.width - 19f),
+                    Mathf.Max(viewport.height, features.Count * rowHeight + 4f)));
+            float rowWidth = Mathf.Max(170f, viewport.width - 20f);
             for (int i = 0; i < features.Count; i++)
             {
-                var f = features[i];
-                float y = i * rowHeight + 2;
-                Rect row = new Rect(2, y, rowWidth - 7, 61);
-                Fill(row, f.Enabled ? new Color(0.14f, 0.145f, 0.16f, 0.88f) : Surface);
-                if (GUI.Button(new Rect(row.x, row.y, row.width - 83, row.height), "", noStyle))
+                Feature feature = features[i];
+                float y = i * rowHeight;
+                Rect row = new Rect(1f, y, rowWidth - 3f, rowHeight - 2f);
+                bool hovered = row.Contains(Event.current.mousePosition + featureScroll);
+                if (selectedFeature == feature || hovered)
+                    Fill(row, selectedFeature == feature ? Surface : Hover);
+                Fill(new Rect(row.x + 6f, row.yMax - 1f, row.width - 12f, 1f), Border);
+
+                if (GUI.Button(new Rect(row.x, row.y, row.width - 79f, row.height), "", noStyle))
                 {
-                    selectedFeature = f;
-                    plugin.Features.Activate(f);
+                    selectedFeature = feature;
+                    plugin.Features.Activate(feature);
                 }
-                DrawText(new Rect(row.x + 11, y + 6, row.width - 99, 21), f.Label, textNormal);
-                DrawText(new Rect(row.x + 11, y + 30, row.width - 101, 22),
-                    ClipText(f.Description, 51), textDim);
-                if (GUI.Button(new Rect(row.xMax - 76, y + 9, 30, 43), "", noStyle))
-                    plugin.Features.ToggleFavorite(f);
-                DrawText(new Rect(row.xMax - 69, y + 13, 28, 20),
-                    plugin.Features.IsFavorite(f) ? "*" : "+", textBold);
-                if (GUI.Button(new Rect(row.xMax - 42, y + 8, 37, 44), "", noStyle))
+                if (feature.Enabled)
+                    Fill(new Rect(row.x, row.y + 10f, 2f, row.height - 20f), Violet);
+                DrawText(new Rect(row.x + 12f, row.y + 7f, row.width - 103f, 19f),
+                    ClipText(feature.Label, 36), feature.Enabled ? textNormal : textSmall);
+                DrawText(new Rect(row.x + 12f, row.y + 29f, row.width - 105f, 19f),
+                    ClipText(feature.Description, 48), textDim);
+
+                Rect favorite = new Rect(row.xMax - 78f, row.y + 8f, 30f, 35f);
+                if (GUI.Button(favorite, "", noStyle))
+                    plugin.Features.ToggleFavorite(feature);
+                DrawText(new Rect(favorite.x + 8f, favorite.y + 6f, 22f, 21f),
+                    plugin.Features.IsFavorite(feature) ? "★" : "☆",
+                    plugin.Features.IsFavorite(feature) ? textAccent : textDim);
+
+                Rect toggle = new Rect(row.xMax - 45f, row.y + 15f, 42f, 22f);
+                Fill(toggle, feature.Enabled ? Violet : Surface);
+                if (GUI.Button(toggle, "", noStyle))
                 {
-                    selectedFeature = f;
-                    plugin.Features.Activate(f);
+                    selectedFeature = feature;
+                    plugin.Features.Activate(feature);
                 }
-                Fill(new Rect(row.xMax - 41, y + 19, 33, 22),
-                    f.Enabled ? White : new Color(0.19f, 0.20f, 0.22f, 1f));
-                DrawText(new Rect(row.xMax - 38, y + 18, 32, 24),
-                    f.ActionOnly ? "GO" : f.Enabled ? "ON" : "OFF",
-                    f.Enabled ? textMono : textSmall);
+                DrawText(new Rect(toggle.x + 5f, toggle.y + 3f, 39f, 19f),
+                    feature.ActionOnly ? "GO" : feature.Enabled ? "ON" : "OFF",
+                    feature.Enabled ? textMono : textDim);
             }
             GUI.EndScrollView();
-            DrawDetails(details, category);
+            if (features.Count == 0)
+                DrawText(new Rect(list.x + 17f, list.y + 59f, list.width - 30f, 60f),
+                    "No registered features in this section.", textDim);
+            DrawDetails(details, ResolveCategory(category));
         }
 
         private void DrawDetails(Rect box, string category)
@@ -373,7 +390,7 @@ namespace Volas
             {
                 int item = i;
                 Rect rect = new Rect(segment * i + 1f, y, segment - 3, 29);
-                Fill(rect, selected == item ? White : Surface);
+                Fill(rect, selected == item ? Violet : Surface);
                 if (GUI.Button(rect, "", noStyle)) onChange(item);
                 DrawText(new Rect(rect.x + 4, y + 4, rect.width - 8, 22), values[i],
                     selected == item ? textMono : textSmall);
@@ -396,7 +413,7 @@ namespace Volas
             Fill(rect, Surface);
             if (GUI.Button(rect, "", noStyle)) onChange(!value);
             DrawText(new Rect(8, y + 4, w - 67, 22), label, textSmall);
-            Fill(new Rect(w - 43, y + 7, 34, 17), value ? White : Hover);
+            Fill(new Rect(w - 43, y + 7, 34, 17), value ? Violet : Hover);
             DrawText(new Rect(w - 40, y + 5, 35, 22), value ? "ON" : "OFF",
                 value ? textMono : textSmall);
             return y + 38;
@@ -429,25 +446,26 @@ namespace Volas
         private void Panel(Rect area)
         {
             Fill(area, Surface);
-            Fill(new Rect(area.x, area.y, area.width, 1), Border);
-            Fill(new Rect(area.x, area.yMax - 1, area.width, 1), Border);
+            Fill(new Rect(area.x, area.y, area.width, 1f), Border);
         }
 
         private void ColumnTitle(Rect area, string title, string number)
         {
-            DrawText(new Rect(area.x + 13, area.y + 11, area.width - 90, 22), title, textSmall);
-            DrawText(new Rect(area.xMax - 51, area.y + 11, 41, 22), number, textDim);
-            Fill(new Rect(area.x + 10, area.y + 34, area.width - 20, 1), Border);
+            DrawText(new Rect(area.x + 12f, area.y + 10f, area.width - 89f, 20f),
+                title.ToLowerInvariant(), textDim);
+            DrawText(new Rect(area.xMax - 52f, area.y + 10f, 42f, 19f),
+                number.ToLowerInvariant(), textDim);
+            Fill(new Rect(area.x + 11f, area.y + 34f, area.width - 22f, 1f), Border);
         }
 
         private bool HomeRow(Rect rect, string label, string status)
         {
-            Vector2 mouse = Event.current.mousePosition;
-            Fill(rect, rect.Contains(mouse) ? Hover : new Color(0.07f, 0.075f, 0.087f, 0.80f));
+            bool hover = rect.Contains(Event.current.mousePosition);
+            if (hover) Fill(rect, Hover);
+            Fill(new Rect(rect.x + 3f, rect.yMax - 1f, rect.width - 6f, 1f), Border);
             bool clicked = GUI.Button(rect, "", noStyle);
-            DrawText(new Rect(rect.x + 9, rect.y + 7, rect.width - 47, 23),
-                ClipText(label, Mathf.Max(10, (int)((rect.width - 55) / 8))), textSmall);
-            DrawText(new Rect(rect.xMax - 41, rect.y + 7, 39, 23), status, textDim);
+            DrawText(new Rect(rect.x + 4f, rect.y + 9f, rect.width - 13f, 24f),
+                label, hover ? textNormal : textSmall);
             return clicked;
         }
 
@@ -461,7 +479,7 @@ namespace Volas
 
         private bool ClickLabel(Rect rect, string label, bool solid)
         {
-            Fill(rect, solid ? White : Surface);
+            Fill(rect, solid ? Violet : Surface);
             bool clicked = GUI.Button(rect, "", noStyle);
             DrawText(new Rect(rect.x + 12, rect.y + 7, rect.width - 24, 22),
                 label, solid ? textMono : textSmall);
@@ -497,25 +515,29 @@ namespace Volas
         {
             if (whitePixel != null) return;
             whitePixel = Pixel(Color.white);
-            windowTexture = Pixel(Ink);
+            windowTexture = RoundedPanelTexture(plugin.Settings.DesktopOpacity.Value);
             backgroundStyle = new GUIStyle(GUI.skin.window);
             backgroundStyle.normal.background = windowTexture;
-            backgroundStyle.border = new RectOffset(0, 0, 0, 0);
+            backgroundStyle.border = new RectOffset(15, 15, 15, 15);
+            backgroundStyle.margin = new RectOffset(0, 0, 0, 0);
             backgroundStyle.padding = new RectOffset(0, 0, 0, 0);
             textSmall = NewText(11, Soft);
-            textDim = NewText(11, Muted);
-            textNormal = NewText(13, White);
-            textBold = NewText(15, White, true);
-            textTitle = NewText(21, White, true);
-            textMono = NewText(11, Color.black, true);
+            textDim = NewText(10, Muted);
+            textNormal = NewText(11, White);
+            textBold = NewText(13, White, true);
+            textTitle = NewText(14, Violet, true);
+            textAccent = NewText(12, Violet, true);
+            textMono = NewText(10, White, true);
             noStyle = new GUIStyle(GUIStyle.none);
             searchField = new GUIStyle(GUI.skin.textField);
-            searchField.fontSize = 12;
-            searchField.normal.textColor = White;
+            searchField.fontSize = 11;
+            searchField.alignment = TextAnchor.MiddleLeft;
+            searchField.normal.textColor = Soft;
             searchField.focused.textColor = White;
-            searchField.normal.background = Pixel(new Color(0.09f, 0.095f, 0.11f, 1f));
+            searchField.normal.background = Pixel(new Color(0f, 0f, 0f, 0f));
             searchField.focused.background = searchField.normal.background;
-            searchField.padding = new RectOffset(8, 7, 4, 4);
+            searchField.border = new RectOffset(0, 0, 0, 0);
+            searchField.padding = new RectOffset(2, 2, 2, 2);
         }
 
         private static GUIStyle NewText(int size, Color color, bool bold = false)
@@ -527,6 +549,31 @@ namespace Volas
             style.clipping = TextClipping.Clip;
             style.wordWrap = false;
             return style;
+        }
+
+        private static Texture2D RoundedPanelTexture(float opacity)
+        {
+            const int size = 48;
+            const float radius = 13f;
+            var texture = new Texture2D(size, size, TextureFormat.RGBA32, false);
+            texture.filterMode = FilterMode.Bilinear;
+            texture.wrapMode = TextureWrapMode.Clamp;
+            float half = (size - 1f) * 0.5f;
+            float inner = half - radius;
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    float dx = Mathf.Max(0f, Mathf.Abs(x - half) - inner);
+                    float dy = Mathf.Max(0f, Mathf.Abs(y - half) - inner);
+                    float edge = Mathf.Clamp01(radius + 0.5f -
+                        Mathf.Sqrt(dx * dx + dy * dy));
+                    texture.SetPixel(x, y,
+                        new Color(Ink.r, Ink.g, Ink.b, opacity * edge));
+                }
+            }
+            texture.Apply();
+            return texture;
         }
 
         private static Texture2D Pixel(Color color)
@@ -555,8 +602,10 @@ namespace Volas
             float value = plugin.Settings.DesktopOpacity.Value;
             if (Mathf.Abs(value - lastAppliedOpacity) < 0.004f) return;
             lastAppliedOpacity = value;
-            windowTexture.SetPixel(0, 0, new Color(0.022f, 0.024f, 0.031f, value));
-            windowTexture.Apply();
+            Texture2D oldTexture = windowTexture;
+            windowTexture = RoundedPanelTexture(value);
+            backgroundStyle.normal.background = windowTexture;
+            if (oldTexture != null) UnityEngine.Object.Destroy(oldTexture);
         }
 
         private void SaveWindow()
