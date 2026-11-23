@@ -7,6 +7,7 @@ namespace Volas
         {
             var registry = plugin.Features;
             MovementFeatures.Register(registry);
+            GunFeatures.Register(registry);
             VisualFeatures.Register(registry);
             TelemetryFeatures.Register(registry);
             UtilityFeatures.Register(registry);

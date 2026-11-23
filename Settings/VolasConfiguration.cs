@@ -12,6 +12,10 @@ namespace Volas
         internal readonly ConfigEntry<bool> RainbowAccent;
         internal readonly ConfigEntry<float> AccentHue;
         internal readonly ConfigEntry<float> VrScale;
+        internal readonly ConfigEntry<float> GunDistance;
+        internal readonly ConfigEntry<float> GunBeamWidth;
+        internal readonly ConfigEntry<float> GunReticleSize;
+        internal readonly ConfigEntry<bool> GunUseForward;
         internal readonly ConfigEntry<string> FavoriteIds;
         internal readonly ConfigEntry<float> WindowX;
         internal readonly ConfigEntry<float> WindowY;
@@ -36,6 +40,17 @@ namespace Volas
             VrScale = config.Bind("Appearance", "VR menu scale", 1f,
                 new ConfigDescription("Physical VR menu size multiplier.",
                     new AcceptableValueRange<float>(0.65f, 1.30f)));
+            GunDistance = config.Bind("GunLib", "Maximum distance", 80f,
+                new ConfigDescription("Raycast distance, in meters.",
+                    new AcceptableValueRange<float>(10f, 250f)));
+            GunBeamWidth = config.Bind("GunLib", "Beam width", 0.012f,
+                new ConfigDescription("Pointer beam width in meters.",
+                    new AcceptableValueRange<float>(0.002f, 0.06f)));
+            GunReticleSize = config.Bind("GunLib", "Reticle diameter", 0.07f,
+                new ConfigDescription("Reticle diameter in meters.",
+                    new AcceptableValueRange<float>(0.025f, 0.20f)));
+            GunUseForward = config.Bind("GunLib", "Aim along forward", false,
+                "If true, aim from right hand +forward. Otherwise aim along -up.");
             FavoriteIds = config.Bind("Favorites", "Feature IDs", "",
                 "Comma-separated favorite feature IDs. Manage using the desktop star controls.");
             WindowX = config.Bind("Desktop", "Window X", 55f, "Horizontal desktop window position.");

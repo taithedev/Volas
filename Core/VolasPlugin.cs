@@ -6,7 +6,7 @@ using UnityEngine.XR;
 
 namespace Volas
 {
-    [BepInPlugin("com.volas.gtag", "Volas", "1.1.0")]
+    [BepInPlugin("com.volas.gtag", "Volas", "1.2.0")]
     public sealed class VolasPlugin : BaseUnityPlugin
     {
         internal static VolasPlugin Instance { get; private set; }
@@ -14,6 +14,8 @@ namespace Volas
         internal GameBridge Game { get; private set; }
         internal FeatureRegistry Features { get; private set; }
         internal VisualEffects Effects { get; private set; }
+        internal GunLib Gun { get; private set; }
+        internal GunEffects Guns { get; private set; }
         internal MovementEffects Movement { get; private set; }
         internal VrMenu Vr { get; private set; }
         internal VolasConfiguration Settings { get; private set; }
@@ -56,6 +58,8 @@ namespace Volas
             DesktopOpen = Settings.OpenDesktopOnLaunch.Value;
             Game = new GameBridge();
             Effects = new VisualEffects(this);
+            Gun = new GunLib(this);
+            Guns = new GunEffects(this);
             Movement = new MovementEffects(this);
             Features = new FeatureRegistry(this);
             FeatureCatalog.Register(this);
@@ -89,6 +93,8 @@ namespace Volas
             lastVrButton = vrPressed;
 
             Features.Tick();
+            Gun.Tick(Guns.AnyEnabled);
+            Guns.Tick();
             Movement.Tick();
             Effects.Tick();
             Vr.Tick();
@@ -100,6 +106,8 @@ namespace Volas
                 Features.FixedTick();
             if (Movement != null)
                 Movement.FixedTick();
+            if (Guns != null)
+                Guns.FixedTick();
         }
 
         private void OnGUI()
@@ -112,6 +120,8 @@ namespace Volas
         {
             if (Features != null) Features.DisableAll();
             if (Movement != null) Movement.Reset();
+            if (Guns != null) Guns.Dispose();
+            if (Gun != null) Gun.Dispose();
             if (Effects != null) Effects.Dispose();
             if (Vr != null) Vr.Dispose();
             if (desktop != null) desktop.Dispose();

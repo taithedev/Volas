@@ -190,6 +190,8 @@ namespace Volas
         {
             foreach (var f in All)
                 Disable(f);
+            if (plugin.Guns != null)
+                plugin.Guns.Reset();
         }
     }
 }

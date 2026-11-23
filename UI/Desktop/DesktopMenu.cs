@@ -83,7 +83,7 @@ namespace Volas
             GUI.DrawTexture(new Rect(0f, 0f, window.width, 5f), white);
             GUI.color = savedColor;
             GUI.Label(new Rect(20f, 13f, 225f, 33f), "VOLAS", titleStyle);
-            GUI.Label(new Rect(window.width - 192f, 21f, 170f, 25f), "GTAG / BepInEx 5 / v1.1", smallStyle);
+            GUI.Label(new Rect(window.width - 192f, 21f, 170f, 25f), "GTAG / BepInEx 5 / v1.2", smallStyle);
             GUI.Label(new Rect(22f, 52f, window.width - 43f, 22f), plugin.Game.RoomSummary(), smallStyle);
 
             GUILayout.BeginArea(new Rect(16f, 82f, window.width - 32f, window.height - 143f));
@@ -106,6 +106,21 @@ namespace Volas
                 if (GUILayout.Button("CLEAR", disabledStyle, GUILayout.Width(54f), GUILayout.Height(26f))) search = "";
                 GUILayout.EndHorizontal();
                 GUILayout.Space(5f);
+                if (categories[selectedCategory] == "Gun Mods")
+                {
+                    GUILayout.Label("GUNLIB  /  Right grip to aim, trigger to activate", smallStyle);
+                    GUILayout.Label("MAX RANGE   " + plugin.Settings.GunDistance.Value.ToString("0") + " m", smallStyle);
+                    float distance = GUILayout.HorizontalSlider(plugin.Settings.GunDistance.Value, 10f, 250f);
+                    if (Mathf.Abs(distance - plugin.Settings.GunDistance.Value) > 1f)
+                        plugin.Settings.GunDistance.Value = distance;
+                    GUILayout.Label("RETICLE DIAMETER  " + plugin.Settings.GunReticleSize.Value.ToString("0.00") + " m", smallStyle);
+                    float reticle = GUILayout.HorizontalSlider(plugin.Settings.GunReticleSize.Value, 0.025f, 0.2f);
+                    if (Mathf.Abs(reticle - plugin.Settings.GunReticleSize.Value) > 0.005f)
+                        plugin.Settings.GunReticleSize.Value = reticle;
+                    bool forward = plugin.Settings.GunUseForward.Value;
+                    bool nextForward = GUILayout.Toggle(forward, "Aim from controller forward axis");
+                    if (nextForward != forward) plugin.Settings.GunUseForward.Value = nextForward;
+                }
                 if (categories[selectedCategory] == "Settings")
                 {
                     GUILayout.Label("ACCENT COLOR", smallStyle);
