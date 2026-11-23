@@ -6,6 +6,8 @@ namespace Volas
     internal sealed class VolasConfiguration
     {
         internal readonly ConfigEntry<KeyboardShortcut> DesktopShortcut;
+        internal readonly ConfigEntry<KeyboardShortcut> VrFallbackShortcut;
+        internal readonly ConfigEntry<bool> VrLegacyYFallback;
         internal readonly ConfigEntry<KeyboardShortcut> ResetShortcut;
         internal readonly ConfigEntry<bool> OpenDesktopOnLaunch;
         internal readonly ConfigEntry<bool> CompactMenu;
@@ -39,6 +41,11 @@ namespace Volas
         {
             DesktopShortcut = config.Bind("Controls", "Toggle desktop",
                 new KeyboardShortcut(KeyCode.F6), "Open or close the desktop menu.");
+            VrFallbackShortcut = config.Bind("Controls", "VR menu keyboard fallback",
+                new KeyboardShortcut(KeyCode.F7),
+                "Open/close the physical VR menu from the PC keyboard to test tracking and rendering.");
+            VrLegacyYFallback = config.Bind("Controls", "Legacy controller Y fallback", true,
+                "Also read the common Unity legacy joystick button 3 mapping for left-controller Y.");
             ResetShortcut = config.Bind("Controls", "Disable all",
                 new KeyboardShortcut(KeyCode.End), "Safely disable all active features.");
             OpenDesktopOnLaunch = config.Bind("Appearance", "Desktop open on launch", false,
