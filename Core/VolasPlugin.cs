@@ -6,7 +6,7 @@ using UnityEngine.XR;
 
 namespace Volas
 {
-    [BepInPlugin("com.volas.gtag", "Volas", "1.3.0")]
+    [BepInPlugin("com.volas.gtag", "Volas", "1.4.0")]
     public sealed class VolasPlugin : BaseUnityPlugin
     {
         internal static VolasPlugin Instance { get; private set; }
@@ -45,7 +45,7 @@ namespace Volas
             {
                 return RainbowTheme
                     ? Color.HSVToRGB(Mathf.Repeat(Time.unscaledTime * 0.13f, 1f), 0.72f, 1f)
-                    : Color.HSVToRGB(Settings != null ? Settings.AccentHue.Value : 0.52f, 0.72f, 1f);
+                    : new Color(0.97f, 0.97f, 1f);
             }
         }
 

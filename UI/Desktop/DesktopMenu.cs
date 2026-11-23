@@ -343,6 +343,12 @@ namespace Volas
                 {
                     y = SettingsSlider(y, w, "VR SIZE", 0.65f, 1.3f,
                         plugin.Settings.VrScale.Value, v => plugin.Settings.VrScale.Value = v);
+                    y = SettingsSlider(y, w, "WRIST LEFT/RIGHT", -0.24f, 0.24f,
+                        plugin.Settings.VrOffsetX.Value, v => plugin.Settings.VrOffsetX.Value = v);
+                    y = SettingsSlider(y, w, "WRIST UP/DOWN", -0.24f, 0.24f,
+                        plugin.Settings.VrOffsetY.Value, v => plugin.Settings.VrOffsetY.Value = v);
+                    y = SettingsSlider(y, w, "WRIST FORWARD", 0.02f, 0.42f,
+                        plugin.Settings.VrOffsetZ.Value, v => plugin.Settings.VrOffsetZ.Value = v);
                     y = Toggle(y, w, "COMPACT VR", plugin.Compact, v => plugin.Compact = v);
                     y = Toggle(y, w, "RAINBOW EFFECTS", plugin.RainbowTheme,
                         v => plugin.RainbowTheme = v);

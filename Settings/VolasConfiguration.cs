@@ -12,6 +12,9 @@ namespace Volas
         internal readonly ConfigEntry<bool> RainbowAccent;
         internal readonly ConfigEntry<float> AccentHue;
         internal readonly ConfigEntry<float> VrScale;
+        internal readonly ConfigEntry<float> VrOffsetX;
+        internal readonly ConfigEntry<float> VrOffsetY;
+        internal readonly ConfigEntry<float> VrOffsetZ;
         internal readonly ConfigEntry<float> GunDistance;
         internal readonly ConfigEntry<float> GunBeamWidth;
         internal readonly ConfigEntry<float> GunReticleSize;
@@ -49,6 +52,15 @@ namespace Volas
             VrScale = config.Bind("Appearance", "VR menu scale", 1f,
                 new ConfigDescription("Physical VR menu size multiplier.",
                     new AcceptableValueRange<float>(0.65f, 1.30f)));
+            VrOffsetX = config.Bind("VR Menu", "Offset X", 0f,
+                new ConfigDescription("Wrist tablet horizontal position in meters.",
+                    new AcceptableValueRange<float>(-0.24f, 0.24f)));
+            VrOffsetY = config.Bind("VR Menu", "Offset Y", 0.06f,
+                new ConfigDescription("Wrist tablet vertical position in meters.",
+                    new AcceptableValueRange<float>(-0.24f, 0.24f)));
+            VrOffsetZ = config.Bind("VR Menu", "Offset Z", 0.16f,
+                new ConfigDescription("Wrist tablet forward position in meters.",
+                    new AcceptableValueRange<float>(0.02f, 0.42f)));
             GunDistance = config.Bind("GunLib", "Maximum distance", 80f,
                 new ConfigDescription("Raycast distance, in meters.",
                     new AcceptableValueRange<float>(10f, 250f)));
@@ -83,8 +95,8 @@ namespace Volas
                 "Comma-separated favorite feature IDs. Manage using the desktop star controls.");
             WindowX = config.Bind("Desktop", "Window X", 55f, "Horizontal desktop window position.");
             WindowY = config.Bind("Desktop", "Window Y", 55f, "Vertical desktop window position.");
-            WindowWidth = config.Bind("Desktop", "Window width", 505f, "Desktop window width.");
-            WindowHeight = config.Bind("Desktop", "Window height", 560f, "Desktop window height.");
+            WindowWidth = config.Bind("Desktop", "Window width", 900f, "Desktop window width.");
+            WindowHeight = config.Bind("Desktop", "Window height", 580f, "Desktop window height.");
         }
     }
 }
