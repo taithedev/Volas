@@ -239,11 +239,9 @@ namespace Volas
                 white, () => plugin.VrOpen = false, 1);
 
             AddButton("<", -0.189f, 0.267f, 0.069f, 0.053f,
-                row, home ? (Action)(() => SwitchPage(-1, totalPages))
-                    : () => SwitchCategory(-1), 2);
+                row, () => { if (home) SwitchPage(-1, totalPages); else SwitchCategory(-1); }, 2);
             AddButton(">", 0.189f, 0.267f, 0.069f, 0.053f,
-                row, home ? (Action)(() => SwitchPage(1, totalPages))
-                    : () => SwitchCategory(1), 3);
+                row, () => { if (home) SwitchPage(1, totalPages); else SwitchCategory(1); }, 3);
             Label(Clip(category.ToUpperInvariant(), 15), -0.118f, 0.267f, 0.013f, white.color);
 
             if (itemCount == 0)
