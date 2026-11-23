@@ -108,6 +108,7 @@ namespace Volas
             ExtraVisuals.Tick();
             Decorations.Tick();
             Vr.Tick();
+            if (desktop != null) desktop.Tick();
         }
 
         private void FixedUpdate()
@@ -118,12 +119,6 @@ namespace Volas
                 Movement.FixedTick();
             if (Guns != null)
                 Guns.FixedTick();
-        }
-
-        private void OnGUI()
-        {
-            if (desktop != null)
-                desktop.Draw();
         }
 
         private void OnDestroy()
