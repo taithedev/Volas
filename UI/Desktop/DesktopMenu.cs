@@ -13,6 +13,9 @@ namespace Volas
         private readonly VolasPlugin plugin;
         private readonly GameObject root;
         private readonly Canvas canvas;
+        private readonly Image windowBackground;
+        private readonly Image innerBackground;
+        private float lastOpacity = -1f;
         private readonly RectTransform canvasRect;
         private readonly RectTransform window;
         private readonly RectTransform pageRoot;
@@ -54,7 +57,8 @@ namespace Volas
         internal DesktopMenu(VolasPlugin owner)
         {
             plugin = owner;
-            font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+            font = Resources.GetBuiltinResource<Font>("Arial.ttf")
+                ?? Font.CreateDynamicFontFromOSFont("Arial", 13);
             rounded = MakeRoundSprite(48, 13);
             softRounded = MakeRoundSprite(48, 8);
 
@@ -78,20 +82,23 @@ namespace Volas
             // The shadow lives behind the main window, but moves with the window.
             window = MakeRect(canvasRect, "Volas Window");
             Place(window, owner.Settings.WindowX.Value, owner.Settings.WindowY.Value, 760f, 500f);
+            window.localScale = new Vector3(
+                Mathf.Clamp(owner.Settings.WindowWidth.Value / 760f, .75f, 1.65f),
+                Mathf.Clamp(owner.Settings.WindowHeight.Value / 500f, .75f, 1.65f), 1f);
             shade.transform.SetParent(window, false);
             Place(shade.rectTransform, 6f, 8f, 760f, 500f);
             shade.transform.SetAsFirstSibling();
 
-            var background = MakeImage(window, "Frosted dark graphite",
+            windowBackground = MakeImage(window, "Frosted dark graphite",
                 new Color(ink.r, ink.g, ink.b, plugin.Settings.DesktopOpacity.Value),
                 rounded, true);
-            Stretch(background.rectTransform);
+            Stretch(windowBackground.rectTransform);
             var rim = MakeImage(window, "Subtle border", borderColor, rounded, true);
             StretchInset(rim.rectTransform, 0f);
-            var inner = MakeImage(window, "Inner glass", new Color(ink.r, ink.g, ink.b, .98f),
+            innerBackground = MakeImage(window, "Inner glass", new Color(ink.r, ink.g, ink.b, .98f),
                 rounded, true);
-            StretchInset(inner.rectTransform, 1f);
-            inner.color = new Color(.030f, .028f, .043f,
+            StretchInset(innerBackground.rectTransform, 1f);
+            innerBackground.color = new Color(.030f, .028f, .043f,
                 plugin.Settings.DesktopOpacity.Value * .85f);
             var header = MakeImage(window, "Header strip", headerColor, softRounded, true);
             header.raycastTarget = true;
@@ -240,6 +247,13 @@ namespace Volas
         internal void Tick()
         {
             if (root == null) return;
+            float alpha = plugin.Settings.DesktopOpacity.Value;
+            if (Mathf.Abs(alpha - lastOpacity) > .001f)
+            {
+                lastOpacity = alpha;
+                windowBackground.color = new Color(ink.r, ink.g, ink.b, alpha);
+                innerBackground.color = new Color(.030f, .028f, .043f, alpha * .85f);
+            }
             bool open = plugin.DesktopOpen;
             if (open != visible)
             {
@@ -309,6 +323,8 @@ namespace Volas
             DestroyChildren(pageRoot);
             if (string.IsNullOrEmpty(currentQuery) && currentPage == "Home")
                 DrawHome();
+            else if (string.IsNullOrEmpty(currentQuery) && currentPage == "Settings")
+                DrawSettingsPage();
             else
                 DrawFeaturePage();
         }
@@ -328,7 +344,8 @@ namespace Volas
                 {
                     string label = cols[col][i];
                     float y = 1f + 43f * i;
-                    Image highlight = MakeImage(pageRoot, "Category " + label, Color.clear);
+                    Image highlight = MakeImage(pageRoot, "Category " + label,
+                        new Color(.08f, .06f, .12f, .10f));
                     highlight.raycastTarget = true;
                     Place(highlight.rectTransform, x, y, 237f, 38f);
                     Button button = highlight.gameObject.AddComponent<Button>();
@@ -351,7 +368,89 @@ namespace Volas
             }
         }
 
-        private void DrawFeaturePage()
+        private void DrawSettingsPage()
+        {
+            MakeText(pageRoot, "Settings", 4f, 0f, 420f, 27f, 14, white, true);
+            string[] names = { "Appearance", "Controls", "Safety" };
+            float[] positions = { 0f, 247f, 494f };
+            for (int i = 0; i < 3; i++)
+            {
+                var panel = MakeImage(pageRoot, "Settings " + names[i],
+                    panelColor, softRounded, true);
+                Place(panel.rectTransform, positions[i], 34f, 236f, 337f);
+                MakeText(panel.rectTransform, names[i].ToLowerInvariant(),
+                    13f, 9f, 208f, 23f, 11, white, true);
+            }
+
+            RectTransform appearance = pageRoot.Find("Settings Appearance") as RectTransform;
+            RectTransform controls = pageRoot.Find("Settings Controls") as RectTransform;
+            RectTransform safety = pageRoot.Find("Settings Safety") as RectTransform;
+
+            MakeText(appearance, "Panel opacity", 14f, 48f, 195f, 19f, 11, muted);
+            MakeSlider(appearance, "Opacity", 15f, 73f, 206f,
+                .72f, 1f, plugin.Settings.DesktopOpacity.Value,
+                v => plugin.Settings.DesktopOpacity.Value = v);
+            MakeText(appearance, "Visual theme: charcoal / violet",
+                14f, 115f, 207f, 27f, 10, muted);
+            MakeButton(appearance, "Rainbow accents",
+                plugin.RainbowTheme ? "RAINBOW ON" : "RAINBOW OFF",
+                14f, 161f, 207f, 33f, panelColor,
+                () => { plugin.RainbowTheme = !plugin.RainbowTheme; RedrawPage(); },
+                white, 10);
+            MakeButton(appearance, "Restore size", "RESET WINDOW SIZE",
+                14f, 207f, 207f, 32f, panelColor,
+                () =>
+                {
+                    window.localScale = Vector3.one;
+                    SavePosition();
+                    RedrawPage();
+                }, white, 10);
+
+            MakeText(controls, "Desktop menu: F6", 13f, 51f, 204f, 22f, 11, muted);
+            MakeText(controls, "Disable all mods: End", 13f, 85f, 204f, 22f, 11, muted);
+            MakeText(controls, "Gun: grip to aim, trigger to fire",
+                13f, 119f, 208f, 45f, 10, muted);
+            MakeButton(controls, "Compact VR",
+                plugin.Compact ? "COMPACT VR ON" : "COMPACT VR OFF",
+                14f, 184f, 207f, 33f, panelColor,
+                () => { plugin.Compact = !plugin.Compact; RedrawPage(); },
+                white, 10);
+
+            MakeText(safety, "Local-only features by default.",
+                14f, 48f, 203f, 42f, 11, muted);
+            MakeText(safety, "Movement mods require solo or a recognized MODDED room.",
+                14f, 100f, 203f, 66f, 11, muted);
+            MakeButton(safety, "Disable all", "PANIC / DISABLE ALL",
+                14f, 197f, 206f, 40f, new Color(.30f, .15f, .40f, .9f),
+                () => { plugin.Features.DisableAll(); RedrawPage(); }, white, 11, true);
+        }
+
+        private void MakeSlider(Transform parent, string title,
+            float x, float y, float width,
+            float min, float max, float value, Action<float> onValue)
+        {
+            var rt = MakeRect(parent, title + " slider");
+            Place(rt, x, y, width, 24f);
+            var track = MakeImage(rt, "Track", new Color(.13f, .12f, .18f, .9f),
+                softRounded, true);
+            Place(track.rectTransform, 0f, 9f, width, 6f);
+            var fill = MakeImage(rt, "Fill", purple, softRounded, true);
+            Place(fill.rectTransform, 0f, 9f, width, 6f);
+            var handle = MakeImage(rt, "Handle", white, rounded, true);
+            Place(handle.rectTransform, 0f, 5f, 14f, 14f);
+            handle.raycastTarget = true;
+            var slider = rt.gameObject.AddComponent<Slider>();
+            slider.direction = Slider.Direction.LeftToRight;
+            slider.transition = Selectable.Transition.None;
+            slider.fillRect = fill.rectTransform;
+            slider.handleRect = handle.rectTransform;
+            slider.minValue = min;
+            slider.maxValue = max;
+            slider.value = value;
+            slider.onValueChanged.AddListener(v => onValue(v));
+        }
+
+                private void DrawFeaturePage()
         {
             string pageName = string.IsNullOrWhiteSpace(currentQuery)
                 ? currentPage : "Search results";
@@ -510,8 +609,8 @@ namespace Volas
             Vector2 position = window.anchoredPosition;
             plugin.Settings.WindowX.Value = position.x;
             plugin.Settings.WindowY.Value = -position.y;
-            plugin.Settings.WindowWidth.Value = window.sizeDelta.x;
-            plugin.Settings.WindowHeight.Value = window.sizeDelta.y;
+            plugin.Settings.WindowWidth.Value = window.sizeDelta.x * window.localScale.x;
+            plugin.Settings.WindowHeight.Value = window.sizeDelta.y * window.localScale.y;
         }
 
         internal void Dispose()
@@ -686,6 +785,7 @@ namespace Volas
         private Vector2 start;
         private Vector2 originalPosition;
         private Vector2 originalSize;
+        private Vector3 originalScale;
 
         public void OnBeginDrag(PointerEventData e)
         {
@@ -693,6 +793,7 @@ namespace Volas
             start = e.position;
             originalPosition = Target.anchoredPosition;
             originalSize = Target.sizeDelta;
+            originalScale = Target.localScale;
         }
 
         public void OnDrag(PointerEventData e)
@@ -703,9 +804,11 @@ namespace Volas
             Vector2 delta = (e.position - start) / scale;
             if (IsResize)
             {
-                Target.sizeDelta = new Vector2(
-                    Mathf.Clamp(originalSize.x + delta.x, 630f, 1500f),
-                    Mathf.Clamp(originalSize.y - delta.y, 420f, 1100f));
+                Target.localScale = new Vector3(
+                    Mathf.Clamp((originalSize.x * originalScale.x + delta.x) /
+                        originalSize.x, .75f, 1.65f),
+                    Mathf.Clamp((originalSize.y * originalScale.y - delta.y) /
+                        originalSize.y, .75f, 1.65f), 1f);
             }
             else
             {
