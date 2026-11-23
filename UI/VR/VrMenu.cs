@@ -115,8 +115,9 @@ namespace Volas
                     plugin.Settings.VrOffsetY.Value,
                     plugin.Settings.VrOffsetZ.Value));
                 Vector3 offset = position - head.position;
-                if (offset.sqrMagnitude < 0.075f || offset.sqrMagnitude > 2.0f ||
-                    Vector3.Dot(head.forward, offset) < -0.25f)
+                if (offset.sqrMagnitude < Mathf.Pow(Mathf.Max(.30f, camera.nearClipPlane + .1f), 2f) ||
+                    offset.sqrMagnitude > 2.0f ||
+                    Vector3.Dot(head.forward, offset.normalized) < -0.18f)
                     preview = true;
             }
             if (preview)
@@ -259,8 +260,8 @@ namespace Volas
         {
             if (!device.isValid) return false;
             bool pressed;
-            if (device.TryGetFeatureValue(CommonUsages.triggerButton, out pressed))
-                return pressed;
+            if (device.TryGetFeatureValue(CommonUsages.triggerButton, out pressed) &&
+                pressed) return true;
             float analog;
             return device.TryGetFeatureValue(CommonUsages.trigger, out analog) &&
                 analog >= .62f;
@@ -617,7 +618,9 @@ namespace Volas
                 }
                 count = list.Count;
             }
-            Label(Trim(title, 21), -0.220f, .223f, .011f, gray.color);
+            Label(Trim(title, 16), -0.220f, .223f, .011f, gray.color);
+            Label(count.ToString() + " ENTRIES", .108f, .223f, .0085f,
+                gray.color);
             int pages = Mathf.Max(1, Mathf.CeilToInt(count / (float)ItemsPerPage));
             page = Mathf.Clamp(page, 0, pages - 1);
             int first = page * ItemsPerPage;
@@ -661,7 +664,7 @@ namespace Volas
                 page < pages - 1 ? buttonRest : body,
                 () => ChangePage(1, pages), true);
 
-            Label("RIGHT HAND: TOUCH OR TRIGGER", -.222f, -.355f, .0082f,
+            Label(Trim(plugin.Features.LastMessage, 28), -.222f, -.356f, .0081f,
                 gray.color);
             AddButton("RESET", .175f, -.355f, .086f, .04f,
                 buttonRest, () =>
