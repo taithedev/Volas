@@ -8,9 +8,9 @@ Volas is a modular C# / BepInEx 5 Mono mod menu with a native Unity uGUI desktop
 
 The desktop menu is built dynamically with Unity Canvas, Text, Image, Button, InputField, ScrollRect and an EventSystem. It recreates the reference's charcoal glass, purple logo, compact tabs, live search and flat three-column Home launcher. It deliberately uses the reference layout, but not copied Untitled artwork or branding.
 
-**F6** opens/closes the PC menu. The header has search, a Settings shortcut, and a close button. Clicking categories opens a scrollable list of *registered* working actions, favorites, and a details panel. Desktop → Settings offers opacity, layout reset, VR compact mode and a working **Gun Studio** with beam/reticle/rainbow/hand controls. Resize from the lower-right corner or drag by the header; state is remembered via BepInEx config.
+**F6** opens/closes the PC menu. The header has search, a Settings shortcut, and a close button. Clicking categories opens a scrollable list of *registered* working actions, favorites, and a details panel. Desktop → Settings offers opacity, layout reset, VR compact mode, an **OPEN VR MENU / TEST** action and a working **Gun Studio** with beam/reticle/rainbow/hand controls. Resize from the lower-right corner or drag by the header; state is remembered via BepInEx config.
 
-The VR menu is now a **3D OLED wrist tablet** with violet trim, raised physical button meshes, smooth left-hand anchoring, visible right-hand selection ray, proximity-touch interaction, right-trigger selection, haptics, and debounce. **Left Y** opens/closes it. Use **CATS, FAV, ON, ALL** for navigation, the row +/* control for favorites, **< / >** to page, **HOME** to return, and **RESET** to disable active features. VR scale and wrist offsets persist in BepInEx configuration.
+The VR menu is now a **3D OLED wrist tablet** with violet trim, rounded physical button meshes, smooth left-hand anchoring, visible right-hand selection ray, proximity-touch interaction, right-trigger selection, haptics, and debounce. **Left Y** opens/closes it with native game and XR input; **F7** or the desktop Settings button can also open the panel for testing. Use **CATS, FAV, ON, ALL** for navigation, the row +/* control for favorites, **< / >** to page, **HOME** to return, and **RESET** to disable active features. VR scale and wrist offsets persist in BepInEx configuration.
 
 **Appearance note:** Desktop rendering is now Unity uGUI, not IMGUI. A dark translucent panel and rounded UI textures approximate the supplied screenshot; true behind-the-panel blur and the screenshot's proprietary font/artwork are not included.
 
@@ -46,7 +46,8 @@ Output: `bin\Release\<framework>\Volas.dll` — with `-Install`, it is copied in
 | Gun Mods (20) | Marker, paint, beacon, ring, pulse, confetti, trail, inspect, ruler, range finder, coordinates, spotlight, grapple, dash, surface grid, spiral stamp, arrow marker, VOLAS sign, sparkles, checkerboard stamp |
 | Telemetry (5) | FPS HUD, clock HUD, position HUD, heading HUD, desktop crosshair |
 | Utilities (5) | Audio mute, 90 FPS target, VSync off, copy coordinates, log room status |
-| Settings (4) | Compact VR menu, rainbow accent, desktop panel toggle, disable all |\n| Local additions (17) | Checkpoint save/return, unstuck, momentum stop, grip boost/glide, PC strafe assist, head marker, two hand markers, desktop camera zoom, local confetti, room information, panic button, clear gun effects, disable movement/visual mods |
+| Settings (4) | Compact VR menu, rainbow accent, desktop panel toggle, disable all |
+| Local additions (17) | Checkpoint save/return, unstuck, momentum stop, grip boost/glide, PC strafe assist, head marker, two hand markers, desktop camera zoom, local confetti, room information, panic button, clear gun effects, disable movement/visual mods |
 
 Most features create local effects or change your own display. Locomotion-changing mods are disabled in ordinary multiplayer rooms by default; game-version compatibility may vary. No network-targeted disruption or anti-ban functions are included.
 
@@ -67,7 +68,8 @@ Volas/
     Visuals/            standard effects, decorations, visual registries
     Telemetry/          FPS, position, clock
     Utilities/          audio, app/display utilities
-    Settings/           feature action registries\n    Extras/             additional local-only effects and safety actions
+    Settings/           feature action registries
+    Extras/             additional local-only effects and safety actions
   GunLib/               shared VR raycaster, effects-agnostic pointer
   Game/                 runtime game adapter
   UI/
