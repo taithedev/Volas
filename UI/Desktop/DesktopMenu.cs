@@ -216,12 +216,12 @@ namespace Volas
             foreach (string tab in Tabs)
             {
                 string chosen = tab;
-                float width = Mathf.Max(42f, tab.Length * 6.1f + 13f);
+                float width = Mathf.Max(29f, tab.Length * 5.6f + 9f);
                 bool active = tab == currentPage;
                 var btn = MakeButton(navigationContent, "Tab " + tab,
                     tab.ToLowerInvariant(), x, 2f, width, 29f,
                     Color.clear, () => Navigate(chosen), active ? white : muted,
-                    active ? 11 : 10, active);
+                    active ? 10 : 9, active);
                 Text label = btn.GetComponentInChildren<Text>();
                 if (label != null) label.alignment = TextAnchor.MiddleCenter;
                 if (active)
