@@ -99,8 +99,8 @@ namespace Volas
                 "Comma-separated favorite feature IDs. Manage using the desktop star controls.");
             WindowX = config.Bind("Desktop", "Window X", 55f, "Horizontal desktop window position.");
             WindowY = config.Bind("Desktop", "Window Y", 55f, "Vertical desktop window position.");
-            WindowWidth = config.Bind("Desktop", "Window width", 900f, "Desktop window width.");
-            WindowHeight = config.Bind("Desktop", "Window height", 580f, "Desktop window height.");
+            WindowWidth = config.Bind("Desktop", "Window width", 760f, "Desktop window width.");
+            WindowHeight = config.Bind("Desktop", "Window height", 500f, "Desktop window height.");
         }
     }
 }
