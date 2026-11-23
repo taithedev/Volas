@@ -1,4 +1,4 @@
-# Volas build troubleshooting (v1.3)
+# Volas build troubleshooting
 
 ## Open the Visual Studio solution, not Folder View
 
@@ -10,7 +10,7 @@ You can also simply run `build.bat` from the repository. For auto-install use `b
 
 This is **not caused by the presence or absence of `src/`**. It means the compiler cannot resolve a required Unity assembly reference or is mixing incompatible Unity/BepInEx runtime assemblies.
 
-The v1.3 project explicitly compiles all source folders and links the installed game's **UnityEngine*.dll** modules as well as `BepInEx.dll`. The earlier project accidentally skipped `GunLib/`; that is also fixed.
+The project explicitly compiles every source folder and references the installed game's Unity modules and BepInEx. The current project also searches for **UnityEngine.dll** in the game Managed folder and BepInEx directories. If that facade is missing and your BepInEx assembly requires it, simply referencing CoreModule will not resolve CS0012.
 
 Try these in order:
 
@@ -19,7 +19,8 @@ Try these in order:
 3. Ensure **BepInEx 5 Mono**, not an IL2CPP-only loader, matches this installation.
 4. If automatic targeting fails, run `build.bat -Framework netstandard2.1`; alternatively `build.bat -Framework net472` if compatible.
 5. In Visual Studio **Build → Clean Solution**, then **Rebuild Solution**. You may delete `bin/` and `obj/` if they contain stale outputs.
-6. Read the **full first CS0012 line** in Output; its named assembly is the precise file that must be reconciled, usually `UnityEngine.CoreModule`, `UnityEngine`, or `netstandard`.
+6. Run `powershell -ExecutionPolicy Bypass -File .\\Build\\Diagnose-References.ps1 -GamePath "FULL_PATH_TO_GAME"` to see which **UnityEngine.dll** and uGUI DLLs exist.
+7. Read the **full first CS0012 line** in Output; its named assembly is the exact dependency that must be reconciled. When the error says `UnityEngine, Version=0.0.0.0`, use a UnityEngine.dll facade from the **same compatible game/BepInEx environment**, not a random Unity version. You can supply `-UnityEngineFacadePath "FULL_PATH_TO_UnityEngine.dll"` to `Build/Build-Volas.ps1`; the path is saved to `Volas.Local.props`.
 
 The script tries both supported target frameworks automatically unless you force one. A failed local build cannot be diagnosed completely from a truncated error line.
 
@@ -50,3 +51,14 @@ For a complete log, use PowerShell:
 ```
 
 Share the **first full error line**, framework target, and the named missing assembly to diagnose a remaining failure.
+
+
+## XRSettings does not exist
+
+`Features/Extras/LocalFeaturePack.cs` no longer references `XRSettings`. Desktop camera zoom now checks for a tracked `XRNode.Head` through `InputDevices`, avoiding an unavailable legacy symbol. Pull the latest branch so Visual Studio compiles the updated source.
+
+## Physical VR buttons not responding
+
+Ensure a valid left-hand controller, right-hand controller and headset are tracked. Press **left Y** to open. Aim at a menu button and press the **right trigger**, or touch a raised button using the right controller tip. Hovered buttons change shade and the pointer appears on a hit. If button text or a material fails to render, review `BepInEx/LogOutput.log`.
+
+The physical wrist menu uses scene-created meshes, not a Unity Editor prefab, and requires no inspector wiring. The DLL must still be compiled and tested locally against the installed game version.
