@@ -133,9 +133,14 @@ namespace Volas
             foreach (DictionaryEntry pair in properties)
             {
                 // A recognized MODDED room is required. An arbitrary private room is not enough.
-                var value = (pair.Key == null ? "" : pair.Key.ToString()) + " " +
-                            (pair.Value == null ? "" : pair.Value.ToString());
-                if (value.IndexOf("MODDED", StringComparison.OrdinalIgnoreCase) >= 0)
+                string key = pair.Key == null ? "" : pair.Key.ToString();
+                string value = pair.Value == null ? "" : pair.Value.ToString();
+                if ((key.Equals("gameMode", StringComparison.OrdinalIgnoreCase) ||
+                     key.Equals("mode", StringComparison.OrdinalIgnoreCase)) &&
+                    value.IndexOf("MODDED", StringComparison.OrdinalIgnoreCase) >= 0)
+                    return true;
+                if (key.Equals("MODDED", StringComparison.OrdinalIgnoreCase) &&
+                    (value.Equals("true", StringComparison.OrdinalIgnoreCase) || value == "1"))
                     return true;
             }
             return false;
