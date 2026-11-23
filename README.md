@@ -10,9 +10,13 @@ The desktop menu is built dynamically with Unity Canvas, Text, Image, Button, In
 
 **F6** opens/closes the PC menu. The header has search, a Settings shortcut, and a close button. Clicking categories opens a scrollable list of *registered* working actions, favorites, and a details panel. Desktop → Settings offers opacity, layout reset, VR compact mode and a working **Gun Studio** with beam/reticle/rainbow/hand controls. Resize from the lower-right corner or drag by the header; state is remembered via BepInEx config.
 
-The VR menu is a physical, framed black-and-white tablet positioned from the **left controller/wrist**. **Left Y** toggles it. The tablet starts on a **category launcher** similar to the supplied handheld-menu reference; tap a category with the opposite hand to enter, tap a mod to toggle it, use **PREV/NEXT** for pages, **HOME** to go back, and **X** to close. Controller trigger can also select a nearby pointed button. The VR size and X/Y/Z anchor offsets are configurable in Desktop → Settings.
+The VR menu is now a **3D OLED wrist tablet** with violet trim, raised physical button meshes, smooth left-hand anchoring, visible right-hand selection ray, proximity-touch interaction, right-trigger selection, haptics, and debounce. **Left Y** opens/closes it. Use **CATS, FAV, ON, ALL** for navigation, the row +/* control for favorites, **< / >** to page, **HOME** to return, and **RESET** to disable active features. VR scale and wrist offsets persist in BepInEx configuration.
 
 **Appearance note:** Desktop rendering is now Unity uGUI, not IMGUI. A dark translucent panel and rounded UI textures approximate the supplied screenshot; true behind-the-panel blur and the screenshot's proprietary font/artwork are not included.
+
+## Build fixes and reference diagnostics
+
+The old `XRSettings` symbol has been removed from the local camera-zoom feature. The build now explicitly resolves an installed `UnityEngine.dll` facade when one exists, adds validation for uGUI DLLs, and saves the resolved reference for subsequent Visual Studio builds. If CS0012 remains because your installed BepInEx references an incompatible or missing UnityEngine assembly, the matching game/BepInEx binaries are needed; this cannot be fixed by inventing an assembly. See [Build troubleshooting](Docs/TROUBLESHOOTING.md).
 
 ## Build the entire project in Windows
 
