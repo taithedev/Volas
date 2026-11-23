@@ -77,7 +77,7 @@ namespace Volas
             Place(shade.rectTransform, 209f, 63f, 767f, 500f);
             // The shadow lives behind the main window, but moves with the window.
             window = MakeRect(canvasRect, "Volas Window");
-            Place(window, 202f, 56f, 760f, 500f);
+            Place(window, owner.Settings.WindowX.Value, owner.Settings.WindowY.Value, 760f, 500f);
             shade.transform.SetParent(window, false);
             Place(shade.rectTransform, 6f, 8f, 760f, 500f);
             shade.transform.SetAsFirstSibling();
@@ -94,6 +94,7 @@ namespace Volas
             inner.color = new Color(.030f, .028f, .043f,
                 plugin.Settings.DesktopOpacity.Value * .85f);
             var header = MakeImage(window, "Header strip", headerColor, softRounded, true);
+            header.raycastTarget = true;
             Place(header.rectTransform, 4f, 3f, 752f, 38f);
 
             MakeText(window, "volas", 14f, 8f, 62f, 20f, 15, purple, true);
@@ -114,6 +115,7 @@ namespace Volas
 
             RectTransform navViewport = MakeRect(window, "Navigation viewport");
             Place(navViewport, 13f, 43f, 735f, 32f);
+            navViewport.gameObject.AddComponent<Image>().color = new Color(0f, 0f, 0f, .001f);
             var navMask = navViewport.gameObject.AddComponent<RectMask2D>();
             var scroll = navViewport.gameObject.AddComponent<ScrollRect>();
             scroll.horizontal = true;
@@ -140,6 +142,7 @@ namespace Volas
             drag.OnComplete = SavePosition;
             // Text and controls sit above the header. The uncovered header still drags.
             var resizeHitbox = MakeImage(window, "Resize handler", Color.clear);
+            resizeHitbox.raycastTarget = true;
             Place(resizeHitbox.rectTransform, 728f, 468f, 32f, 32f);
             var resize = resizeHitbox.gameObject.AddComponent<VolasUIDrag>();
             resize.Target = window;
@@ -153,6 +156,7 @@ namespace Volas
             Center(crosshairH.rectTransform, 18f, 2f);
             Center(crosshairV.rectTransform, 2f, 18f);
             root.SetActive(false);
+            window.gameObject.SetActive(false);
         }
 
         private void EnsureEventSystem()
@@ -247,12 +251,13 @@ namespace Volas
                     Cursor.lockState = CursorLockMode.None;
                     Cursor.visible = true;
                     root.SetActive(true);
+                    window.gameObject.SetActive(true);
                     RedrawPage();
                 }
                 else
                 {
                     // Only restore the cursor state we captured on opening.
-                    root.SetActive(false);
+                    window.gameObject.SetActive(false);
                     Cursor.lockState = savedLockMode;
                     Cursor.visible = savedCursorVisible;
                 }
@@ -324,6 +329,7 @@ namespace Volas
                     string label = cols[col][i];
                     float y = 1f + 43f * i;
                     Image highlight = MakeImage(pageRoot, "Category " + label, Color.clear);
+                    highlight.raycastTarget = true;
                     Place(highlight.rectTransform, x, y, 237f, 38f);
                     Button button = highlight.gameObject.AddComponent<Button>();
                     button.transition = Selectable.Transition.ColorTint;
@@ -364,6 +370,7 @@ namespace Volas
 
             RectTransform viewport = MakeRect(leftPanel.rectTransform, "Feature scroll viewport");
             Place(viewport, 7f, 35f, 445f, 298f);
+            viewport.gameObject.AddComponent<Image>().color = new Color(0f, 0f, 0f, .001f);
             viewport.gameObject.AddComponent<RectMask2D>();
             ScrollRect scroller = viewport.gameObject.AddComponent<ScrollRect>();
             scroller.vertical = true;
@@ -386,6 +393,7 @@ namespace Volas
                     selected == mod ? hoverColor : new Color(.055f, .052f, .078f, .33f),
                     softRounded, true);
                 Place(row.rectTransform, 2f, y + 1f, 431f, 53f);
+                row.raycastTarget = true;
                 Button choose = row.gameObject.AddComponent<Button>();
                 choose.transition = Selectable.Transition.None;
                 choose.onClick.AddListener(() =>
