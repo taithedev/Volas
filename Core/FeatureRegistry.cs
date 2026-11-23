@@ -50,7 +50,7 @@ namespace Volas
         {
             if (Find(f.Id) != null) throw new InvalidOperationException("Duplicate Volas feature: " + f.Id);
             All.Add(f);
-            if (Categories.Count == 0) Categories.Add("Favorites");
+            if (Categories.Count == 0) { Categories.Add("All"); Categories.Add("Favorites"); }
             if (!Categories.Contains(f.Category)) Categories.Add(f.Category);
             Revision++;
         }
@@ -68,6 +68,7 @@ namespace Volas
 
         internal List<Feature> InCategory(string category)
         {
+            if (category == "All") return new List<Feature>(All);
             return category == "Favorites"
                 ? All.FindAll(f => favorites.Contains(f.Id))
                 : All.FindAll(f => f.Category == category);
@@ -103,6 +104,11 @@ namespace Volas
         internal void Activate(Feature f)
         {
             if (f == null) return;
+            if (f.Enabled)
+            {
+                Disable(f);
+                return;
+            }
             if (f.NeedsModdedRoom && !plugin.Game.IsSoloOrModdedRoom())
             {
                 LastMessage = f.Label + ": solo or MODDED room only";
@@ -116,12 +122,6 @@ namespace Volas
                 try { f.OnEnable?.Invoke(plugin); LastMessage = f.Label + ": executed"; }
                 catch (Exception ex) { Fault(f, ex); }
                 Revision++;
-                return;
-            }
-
-            if (f.Enabled)
-            {
-                Disable(f);
                 return;
             }
 

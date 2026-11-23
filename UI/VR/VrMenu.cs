@@ -94,7 +94,7 @@ namespace Volas
 
             Box("Main panel", 0f, 0f, 0.52f, 0.63f, new Color(0.025f, 0.028f, 0.036f, 1f), 0.0f);
             accentSurfaces.Add(Box("Accent stripe", 0f, 0.293f, 0.52f, 0.008f, plugin.Accent, 0.018f));
-            Text("VOLAS    /    PCVR", -0.22f, 0.255f, 0.018f, Color.white);
+            Text("VOLAS  1.1   /   PCVR", -0.22f, 0.255f, 0.018f, Color.white);
             Text(plugin.Game.RoomSummary(), -0.22f, 0.219f, 0.010f, new Color(0.60f, 0.65f, 0.73f));
 
             AddButton("<", -0.185f, 0.166f, 0.065f, 0.053f, null, () =>

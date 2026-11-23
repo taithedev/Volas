@@ -10,6 +10,8 @@ namespace Volas
     {
         private Type playerType;
         private Type photonType;
+        private Camera cachedCamera;
+        private float nextTypeLookup;
         internal object Player { get; private set; }
 
         internal GameBridge()
@@ -20,10 +22,14 @@ namespace Volas
 
         internal void Refresh()
         {
-            if (playerType == null)
-                playerType = FindType("GorillaLocomotion.GTPlayer") ?? FindType("GorillaLocomotion.Player");
-            if (photonType == null)
-                photonType = FindType("Photon.Pun.PhotonNetwork");
+            if (Time.unscaledTime >= nextTypeLookup && (playerType == null || photonType == null))
+            {
+                if (playerType == null)
+                    playerType = FindType("GorillaLocomotion.GTPlayer") ?? FindType("GorillaLocomotion.Player");
+                if (photonType == null)
+                    photonType = FindType("Photon.Pun.PhotonNetwork");
+                nextTypeLookup = Time.unscaledTime + 2f;
+            }
 
             if (playerType != null)
             {
@@ -33,7 +39,14 @@ namespace Volas
             }
         }
 
-        internal Camera HeadCamera { get { return Camera.main; } }
+        internal Camera HeadCamera
+        {
+            get
+            {
+                if (cachedCamera == null) cachedCamera = Camera.main;
+                return cachedCamera;
+            }
+        }
 
         internal Rigidbody Body
         {
