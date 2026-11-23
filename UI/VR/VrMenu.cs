@@ -6,343 +6,555 @@ using UnityEngine.XR;
 namespace Volas
 {
     /// <summary>
-    /// Physical hand-following VR tablet based on the supplied wrist-menu references.
-    /// All buttons are 3D geometry; interaction uses the opposite controller's tip.
-    /// It does not require UI prefabs, Canvas objects, or extra VR packages.
+    /// A physical left-hand VR menu. Real raised 3D button surfaces with
+    /// right-hand proximity touch, controller ray selection and haptics.
+    /// No IMGUI, prefabs, scene edits or network actions.
     /// </summary>
     internal sealed class VrMenu
     {
-        private const int PageSize = 7;
-        private readonly VolasPlugin plugin;
-        private readonly List<TouchButton> buttons = new List<TouchButton>();
-        private GameObject root;
-        private Material black;
-        private Material charcoal;
-        private Material row;
-        private Material hover;
-        private Material lightHover;
-        private Material white;
-        private Material dim;
-        private int categoryIndex = -1; // -1: physical category launcher, like the reference menu
-        private int page = 0;
-        private int currentRevision = -1;
-        private int hoveredButton = -1;
-        private int lastPressedButton = -1;
-        private float nextAllowedPress;
-        private bool lastTrigger;
+        private const int ItemsPerPage = 6;
+        private const float ButtonPlane = 0.049f;
+        private const float TouchPlane = 0.057f;
 
-        private sealed class TouchButton
+        private readonly VolasPlugin plugin;
+        private readonly List<PhysicalButton> buttons = new List<PhysicalButton>();
+        private readonly List<string> categories = new List<string>();
+        private GameObject root;
+        private Transform content;
+        private GameObject pointerDot;
+        private LineRenderer pointerBeam;
+        private Material deepBlack;
+        private Material body;
+        private Material buttonRest;
+        private Material buttonHover;
+        private Material active;
+        private Material activeHover;
+        private Material accent;
+        private Material gray;
+        private Material light;
+        private Material buttonOutline;
+
+        private enum ScreenMode { Categories, Features, Favorites, Enabled, All }
+        private ScreenMode screen = ScreenMode.Categories;
+        private string currentCategory = "";
+        private int page;
+        private int displayedRevision = -1;
+        private bool firstPosition = true;
+        private bool previousTrigger;
+        private bool touchArmed = true;
+        private int hovered = -1;
+        private float nextPressAt;
+        private float lastPulseAt;
+        private bool wasOpen;
+
+        private sealed class PhysicalButton
         {
-            internal float X, Y, Width, Height;
-            internal int Id;
-            internal Action Click;
-            internal Renderer Surface;
-            internal Material Resting;
+            internal float X;
+            internal float Y;
+            internal float Width;
+            internal float Height;
+            internal Action Action;
+            internal Renderer Renderer;
+            internal Material Normal;
+            internal Material Hovered;
         }
 
         internal VrMenu(VolasPlugin owner) { plugin = owner; }
 
         internal void Tick()
         {
-            Transform left = plugin.Game.LeftHand;
-            Transform right = plugin.Game.RightHand;
-            Camera head = plugin.Game.HeadCamera;
-            if (!plugin.VrOpen || left == null || head == null)
+            Transform anchor = plugin.Game.LeftHand;
+            Camera camera = plugin.Game.HeadCamera;
+            if (!plugin.VrOpen || anchor == null || camera == null)
             {
                 if (root != null) root.SetActive(false);
-                hoveredButton = -1;
-                lastPressedButton = -1;
-                lastTrigger = false;
+                if (pointerDot != null) pointerDot.SetActive(false);
+                if (pointerBeam != null) pointerBeam.gameObject.SetActive(false);
+                if (wasOpen)
+                {
+                    previousTrigger = false;
+                    touchArmed = true;
+                    firstPosition = true;
+                    wasOpen = false;
+                    hovered = -1;
+                }
                 return;
             }
 
-            if (root == null)
-            {
-                if (!CreateTablet()) return;
-                currentRevision = -1;
-            }
+            if (root == null && !CreateMenu()) return;
             root.SetActive(true);
-            // The tablet is physically attached to the left controller's position,
-            // with a readable orientation facing the player's headset.
-            root.transform.position = left.TransformPoint(new Vector3(
+
+            Vector3 position = anchor.TransformPoint(new Vector3(
                 plugin.Settings.VrOffsetX.Value,
                 plugin.Settings.VrOffsetY.Value,
                 plugin.Settings.VrOffsetZ.Value));
-            Vector3 towardsHead = head.transform.position - root.transform.position;
-            if (towardsHead.sqrMagnitude > 0.01f)
-                root.transform.rotation = Quaternion.LookRotation(towardsHead.normalized, Vector3.up);
-            root.transform.localScale = Vector3.one * plugin.Settings.VrScale.Value *
-                (plugin.Compact ? 0.8f : 1f);
+            Vector3 facing = camera.transform.position - position;
+            Quaternion orientation = facing.sqrMagnitude > 0.0001f
+                ? Quaternion.LookRotation(facing.normalized, Vector3.up)
+                : anchor.rotation;
+            if (firstPosition)
+            {
+                root.transform.position = position;
+                root.transform.rotation = orientation;
+                firstPosition = false;
+            }
+            else
+            {
+                float t = 1f - Mathf.Exp(-21f * Time.unscaledDeltaTime);
+                root.transform.position = Vector3.Lerp(root.transform.position, position, t);
+                root.transform.rotation = Quaternion.Slerp(root.transform.rotation, orientation, t);
+            }
+            root.transform.localScale = Vector3.one *
+                plugin.Settings.VrScale.Value * (plugin.Compact ? 0.82f : 1f);
+            if (!wasOpen)
+            {
+                wasOpen = true;
+                displayedRevision = -1;
+            }
+            if (displayedRevision != plugin.Features.Revision)
+                Rebuild();
 
-            if (currentRevision != plugin.Features.Revision) Rebuild();
+            Transform hand = plugin.Game.RightHand;
+            if (hand == null)
+            {
+                SetHover(-1);
+                HidePointer();
+                return;
+            }
 
-            if (right == null) return;
-            Vector3 tip = root.transform.InverseTransformPoint(
-                right.TransformPoint(new Vector3(0f, -0.018f, 0.045f)));
-            bool near = Mathf.Abs(tip.z - 0.041f) < 0.105f;
-            int target = FindButton(tip.x, tip.y, near);
-
+            InputDevice controller = InputDevices.GetDeviceAtXRNode(XRNode.RightHand);
             bool trigger = false;
-            var rightDevice = InputDevices.GetDeviceAtXRNode(XRNode.RightHand);
-            if (rightDevice.isValid)
-                rightDevice.TryGetFeatureValue(CommonUsages.triggerButton, out trigger);
-
-            // Optional laser-like selection for controller poses where direct touch
-            // is awkward. The panel is still a physical 3D object attached to the wrist.
-            if (target < 0 && rightDevice.isValid && trigger)
+            if (controller.isValid)
             {
-                var ray = new Ray(right.position, right.forward);
-                var plane = new Plane(root.transform.forward, root.transform.position +
-                    root.transform.forward * 0.042f);
-                float distance;
-                if (plane.Raycast(ray, out distance) && distance > 0f && distance < 0.65f)
+                if (!controller.TryGetFeatureValue(CommonUsages.triggerButton, out trigger))
                 {
-                    Vector3 onTablet = root.transform.InverseTransformPoint(ray.GetPoint(distance));
-                    target = FindButton(onTablet.x, onTablet.y, true);
+                    float value;
+                    if (controller.TryGetFeatureValue(CommonUsages.trigger, out value))
+                        trigger = value >= 0.65f;
                 }
             }
 
-            if (target != hoveredButton)
+            Vector3 finger = root.transform.InverseTransformPoint(
+                hand.TransformPoint(new Vector3(0f, -0.018f, 0.047f)));
+            bool inTouchDepth = Mathf.Abs(finger.z - TouchPlane) <= 0.048f;
+            int touched = FindButton(finger.x, finger.y, inTouchDepth);
+            if (touched < 0 || !inTouchDepth)
+                touchArmed = true;
+
+            int pointed;
+            Vector3 worldHit;
+            bool rayHit = FindPointer(hand, out pointed, out worldHit);
+            UpdatePointer(hand, rayHit, worldHit, controller);
+
+            int target = touched >= 0 ? touched : pointed;
+            SetHover(target);
+            bool touchPress = touched >= 0 && touchArmed;
+            bool rayPress = pointed >= 0 && trigger && !previousTrigger;
+            previousTrigger = trigger;
+
+            if ((touchPress || rayPress) && Time.unscaledTime >= nextPressAt)
             {
-                hoveredButton = target;
-                for (int i = 0; i < buttons.Count; i++)
+                int index = touchPress ? touched : pointed;
+                if (index >= 0 && index < buttons.Count)
                 {
-                    if (buttons[i].Surface != null)
-                        buttons[i].Surface.sharedMaterial = i == target
-                            ? (buttons[i].Resting == white ? lightHover : hover)
-                            : buttons[i].Resting;
+                    touchArmed = false;
+                    nextPressAt = Time.unscaledTime + 0.21f;
+                    Action action = buttons[index].Action;
+                    Haptic(controller);
+                    if (action != null) action();
                 }
             }
-
-            bool pressed = target >= 0 && ((near && target != lastPressedButton) ||
-                (trigger && !lastTrigger));
-            if (pressed && Time.unscaledTime >= nextAllowedPress)
-            {
-                Action click = buttons[target].Click;
-                nextAllowedPress = Time.unscaledTime + 0.22f;
-                lastPressedButton = target;
-                if (click != null) click();
-            }
-
-            if (!near && !trigger) lastPressedButton = -1;
-            lastTrigger = trigger;
         }
 
-        private int FindButton(float x, float y, bool enabled)
+        private bool CreateMenu()
         {
-            if (!enabled) return -1;
-            for (int i = 0; i < buttons.Count; i++)
-            {
-                TouchButton button = buttons[i];
-                if (Mathf.Abs(x - button.X) <= button.Width * 0.5f &&
-                    Mathf.Abs(y - button.Y) <= button.Height * 0.5f)
-                    return i;
-            }
-            return -1;
-        }
-
-        private bool CreateTablet()
-        {
-            if (!EnsureMaterials()) return false;
-            root = new GameObject("Volas physical wrist tablet");
+            if (!CreateMaterials()) return false;
+            root = new GameObject("Volas physical VR menu");
+            UnityEngine.Object.DontDestroyOnLoad(root);
             root.transform.localScale = Vector3.one;
-            // Layered slabs and a visible frame make this a physical menu, not
-            // a floating desktop overlay or a texture placed on the screen.
-            Cube("Wrist mount", 0, -0.03f, -0.036f, 0.16f, 0.31f, 0.055f, charcoal);
-            Cube("Tablet back", 0, 0, -0.014f, 0.50f, 0.785f, 0.034f, charcoal);
-            Cube("Tablet outline", 0, 0, 0.004f, 0.492f, 0.776f, 0.004f, white);
-            Cube("OLED screen", 0, 0, 0.010f, 0.48f, 0.765f, 0.003f, black);
-            Cube("Header strip", 0, 0.343f, 0.021f, 0.46f, 0.066f, 0.005f, charcoal);
-            Cube("White top line", 0, 0.379f, 0.025f, 0.45f, 0.005f, 0.006f, white);
-            Cube("Footer divider", 0, -0.269f, 0.024f, 0.435f, 0.002f, 0.004f, dim);
+
+            // Solid physical back with an OLED front, raised navigation and buttons.
+            Cube(root.transform, "Grip mount", 0f, -0.083f, -0.035f,
+                0.135f, 0.29f, 0.046f, body);
+            Cube(root.transform, "Backplate", 0f, 0f, -0.016f,
+                0.508f, 0.806f, 0.039f, body);
+            Cube(root.transform, "Accent edge", 0f, 0f, 0.003f,
+                0.498f, 0.795f, 0.008f, accent);
+            Cube(root.transform, "OLED inset", 0f, 0f, 0.011f,
+                0.487f, 0.780f, 0.008f, deepBlack);
+            Cube(root.transform, "Header band", 0f, 0.343f, 0.023f,
+                0.474f, 0.074f, 0.008f, body);
+            Cube(root.transform, "Footer band", 0f, -0.345f, 0.024f,
+                0.473f, 0.088f, 0.008f, body);
+
+            content = new GameObject("Volas runtime buttons and labels").transform;
+            content.SetParent(root.transform, false);
+            BuildPointer();
+            Rebuild();
             return true;
         }
 
-        private bool EnsureMaterials()
+        private bool CreateMaterials()
         {
-            if (black != null) return true;
+            if (deepBlack != null) return true;
             Shader shader = Shader.Find("Unlit/Color") ??
                 Shader.Find("Sprites/Default") ??
                 Shader.Find("Standard");
             if (shader == null)
             {
-                plugin.Log.LogError("Volas tablet: a compatible Unity material shader is missing.");
+                plugin.Log.LogError("Volas physical menu: no supported Unity shader found.");
                 return false;
             }
-            black = MakeMaterial(shader, new Color(0.017f, 0.018f, 0.025f));
-            charcoal = MakeMaterial(shader, new Color(0.053f, 0.057f, 0.068f));
-            row = MakeMaterial(shader, new Color(0.105f, 0.11f, 0.13f));
-            hover = MakeMaterial(shader, new Color(0.30f, 0.31f, 0.34f));
-            lightHover = MakeMaterial(shader, new Color(0.88f, 0.88f, 0.90f));
-            white = MakeMaterial(shader, new Color(0.97f, 0.97f, 1f));
-            dim = MakeMaterial(shader, new Color(0.56f, 0.57f, 0.60f));
+            deepBlack = Material(shader, new Color(.018f, .015f, .028f));
+            body = Material(shader, new Color(.055f, .047f, .072f));
+            buttonRest = Material(shader, new Color(.105f, .094f, .14f));
+            buttonHover = Material(shader, new Color(.25f, .17f, .35f));
+            active = Material(shader, new Color(.47f, .23f, .81f));
+            activeHover = Material(shader, new Color(.64f, .39f, .97f));
+            accent = Material(shader, new Color(.40f, .19f, .74f));
+            gray = Material(shader, new Color(.58f, .55f, .65f));
+            light = Material(shader, new Color(.93f, .91f, .97f));
+            buttonOutline = Material(shader, new Color(.14f, .12f, .19f));
             return true;
         }
 
-        private static Material MakeMaterial(Shader shader, Color color)
+        private static Material Material(Shader shader, Color color)
         {
-            var result = new Material(shader);
-            result.color = color;
-            return result;
+            var material = new Material(shader);
+            material.color = color;
+            return material;
         }
 
-        private Renderer Cube(string name, float x, float y, float z,
-            float width, float height, float depth, Material material)
+        private static Renderer Cube(Transform parent, string name,
+            float x, float y, float z, float width, float height,
+            float depth, Material material)
         {
-            var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            go.name = name;
-            go.transform.SetParent(root.transform, false);
-            go.transform.localPosition = new Vector3(x, y, z);
-            go.transform.localRotation = Quaternion.identity;
-            go.transform.localScale = new Vector3(width, height, depth);
-            var collision = go.GetComponent<Collider>();
-            if (collision != null) collision.enabled = false;
-            var renderer = go.GetComponent<Renderer>();
+            GameObject obj = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            obj.name = name;
+            obj.transform.SetParent(parent, false);
+            obj.transform.localPosition = new Vector3(x, y, z);
+            obj.transform.localRotation = Quaternion.identity;
+            obj.transform.localScale = new Vector3(width, height, depth);
+            Collider collider = obj.GetComponent<Collider>();
+            if (collider != null) collider.enabled = false;
+            Renderer renderer = obj.GetComponent<Renderer>();
             renderer.sharedMaterial = material;
             return renderer;
         }
 
+        private void BuildPointer()
+        {
+            GameObject lineObject = new GameObject("Volas menu selection ray");
+            lineObject.transform.SetParent(root.transform, false);
+            pointerBeam = lineObject.AddComponent<LineRenderer>();
+            pointerBeam.useWorldSpace = true;
+            pointerBeam.positionCount = 2;
+            pointerBeam.startWidth = 0.0025f;
+            pointerBeam.endWidth = 0.0025f;
+            pointerBeam.sharedMaterial = accent;
+            pointerBeam.startColor = new Color(1f, 1f, 1f, .55f);
+            pointerBeam.endColor = new Color(1f, 1f, 1f, .15f);
+            pointerBeam.gameObject.SetActive(false);
+
+            pointerDot = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            pointerDot.name = "Volas menu pointer dot";
+            pointerDot.transform.SetParent(root.transform, false);
+            pointerDot.transform.localScale = Vector3.one * .014f;
+            pointerDot.GetComponent<Renderer>().sharedMaterial = activeHover;
+            Collider collision = pointerDot.GetComponent<Collider>();
+            if (collision != null) collision.enabled = false;
+            pointerDot.SetActive(false);
+        }
+
+        private void UpdatePointer(Transform hand, bool visible,
+            Vector3 point, InputDevice controller)
+        {
+            if (pointerDot == null || pointerBeam == null) return;
+            // Pointer is only visible when an actual UI surface is pointed at.
+            pointerDot.SetActive(visible);
+            pointerBeam.gameObject.SetActive(visible);
+            if (!visible) return;
+            pointerDot.transform.position = point + root.transform.forward * .013f;
+            pointerBeam.SetPosition(0, hand.position);
+            pointerBeam.SetPosition(1, point);
+        }
+
+        private void HidePointer()
+        {
+            if (pointerDot != null) pointerDot.SetActive(false);
+            if (pointerBeam != null) pointerBeam.gameObject.SetActive(false);
+        }
+
+        private bool FindPointer(Transform hand, out int index, out Vector3 point)
+        {
+            index = -1;
+            point = Vector3.zero;
+            // Both common controller-axis orientations work across VR rigs.
+            Vector3[] directions = { hand.forward, -hand.up };
+            float bestDistance = float.MaxValue;
+            Plane plane = new Plane(root.transform.forward,
+                root.transform.position + root.transform.forward * ButtonPlane);
+            foreach (Vector3 direction in directions)
+            {
+                Ray ray = new Ray(hand.position, direction);
+                float distance;
+                if (!plane.Raycast(ray, out distance) ||
+                    distance <= 0.04f || distance >= 0.85f ||
+                    distance >= bestDistance) continue;
+                Vector3 hit = ray.GetPoint(distance);
+                Vector3 local = root.transform.InverseTransformPoint(hit);
+                int candidate = FindButton(local.x, local.y, true);
+                if (candidate == -1) continue;
+                bestDistance = distance;
+                index = candidate;
+                point = hit;
+            }
+            return index >= 0;
+        }
+
+        private int FindButton(float x, float y, bool eligible)
+        {
+            if (!eligible) return -1;
+            // Newer buttons (favorites etc.) take priority over wider rows.
+            for (int i = buttons.Count - 1; i >= 0; i--)
+            {
+                PhysicalButton item = buttons[i];
+                if (Mathf.Abs(item.X - x) <= item.Width * .5f &&
+                    Mathf.Abs(item.Y - y) <= item.Height * .5f)
+                    return i;
+            }
+            return -1;
+        }
+
+        private void SetHover(int index)
+        {
+            if (hovered == index) return;
+            hovered = index;
+            for (int i = 0; i < buttons.Count; i++)
+            {
+                PhysicalButton item = buttons[i];
+                if (item.Renderer != null)
+                    item.Renderer.sharedMaterial =
+                        index == i ? item.Hovered : item.Normal;
+            }
+        }
+
+        private void Haptic(InputDevice controller)
+        {
+            if (!controller.isValid || Time.unscaledTime < lastPulseAt + .11f)
+                return;
+            lastPulseAt = Time.unscaledTime;
+            try { controller.SendHapticImpulse(0u, .26f, .055f); }
+            catch { /* Unsupported controllers still receive button input. */ }
+        }
+
         private void Rebuild()
         {
-            if (root == null) return;
-
-            // Preserve structural frame children, delete the old clickable pages.
-            for (int i = root.transform.childCount - 1; i >= 0; i--)
+            if (content == null) return;
+            for (int i = content.childCount - 1; i >= 0; i--)
             {
-                Transform child = root.transform.GetChild(i);
-                if (child.name.StartsWith("UI ", StringComparison.Ordinal))
-                {
-                    child.gameObject.SetActive(false);
-                    UnityEngine.Object.Destroy(child.gameObject);
-                }
+                Transform child = content.GetChild(i);
+                child.gameObject.SetActive(false);
+                UnityEngine.Object.Destroy(child.gameObject);
             }
             buttons.Clear();
-            hoveredButton = -1;
-            // Keep lastPressedButton latched across page rebuilds so touching
-            // NEXT does not automatically press it again while the hand stays there.
+            hovered = -1;
+            UpdateCategories();
 
-            var categories = plugin.Features.Categories;
-            if (categories.Count == 0) return;
-            if (categoryIndex < -1 || categoryIndex >= categories.Count) categoryIndex = -1;
-            bool home = categoryIndex == -1;
-            string category = home ? "Categories" : categories[categoryIndex];
-            var features = home ? null : plugin.Features.InCategory(category);
-            int itemCount = home ? categories.Count : features.Count;
-            int totalPages = Mathf.Max(1, Mathf.CeilToInt(itemCount / (float)PageSize));
-            page = Mathf.Clamp(page, 0, totalPages - 1);
+            Label("VOLAS", -0.216f, 0.348f, .017f, activeHover.color, true);
+            Label("v1.5", -0.074f, 0.348f, .009f, gray.color);
+            AddButton("HOME", 0.119f, 0.348f, .092f, .048f,
+                buttonRest, () => Open(ScreenMode.Categories), true);
+            AddButton("X", .211f, .348f, .048f, .048f,
+                active, () => plugin.VrOpen = false, true);
 
-            Label("VOLAS", -0.213f, 0.343f, 0.018f, white.color);
-            Label("v1.4", 0.028f, 0.343f, 0.010f, dim.color);
-            AddButton("HOME", 0.139f, 0.345f, 0.092f, 0.046f,
-                row, GoHome, 6);
-            AddButton("X", 0.207f, 0.345f, 0.04f, 0.046f,
-                white, () => plugin.VrOpen = false, 1);
+            AddButton("CATS", -0.177f, .277f, .092f, .047f,
+                screen == ScreenMode.Categories ? active : buttonRest,
+                () => Open(ScreenMode.Categories), true);
+            AddButton("FAV", -.060f, .277f, .092f, .047f,
+                screen == ScreenMode.Favorites ? active : buttonRest,
+                () => Open(ScreenMode.Favorites), true);
+            AddButton("ON", .057f, .277f, .092f, .047f,
+                screen == ScreenMode.Enabled ? active : buttonRest,
+                () => Open(ScreenMode.Enabled), true);
+            AddButton("ALL", .174f, .277f, .092f, .047f,
+                screen == ScreenMode.All ? active : buttonRest,
+                () => Open(ScreenMode.All), true);
 
-            AddButton("<", -0.189f, 0.267f, 0.069f, 0.053f,
-                row, () => { if (home) SwitchPage(-1, totalPages); else SwitchCategory(-1); }, 2);
-            AddButton(">", 0.189f, 0.267f, 0.069f, 0.053f,
-                row, () => { if (home) SwitchPage(1, totalPages); else SwitchCategory(1); }, 3);
-            Label(Clip(category.ToUpperInvariant(), 15), -0.118f, 0.267f, 0.013f, white.color);
-
-            if (itemCount == 0)
-                Label("NO MODS HERE", -0.205f, 0.10f, 0.013f, dim.color);
-
-            int offset = page * PageSize;
-            for (int i = 0; i < PageSize && offset + i < itemCount; i++)
+            var list = new List<Feature>();
+            int count;
+            string title;
+            if (screen == ScreenMode.Categories)
             {
-                int itemIndex = offset + i;
-                float y = 0.197f - i * 0.065f;
-                if (home)
+                count = categories.Count;
+                title = "CATEGORIES";
+            }
+            else
+            {
+                switch (screen)
                 {
-                    string entry = categories[itemIndex];
-                    AddButton(Clip(entry.ToUpperInvariant(), 22) + "   >", 0f, y,
-                        0.427f, 0.057f, row, () => OpenCategory(itemIndex),
-                        100 + itemIndex);
+                    case ScreenMode.Favorites:
+                        title = "FAVORITES";
+                        list = plugin.Features.InCategory("Favorites");
+                        break;
+                    case ScreenMode.Enabled:
+                        title = "ENABLED";
+                        list = plugin.Features.All.FindAll(f => f.Enabled);
+                        break;
+                    case ScreenMode.All:
+                        title = "ALL MODS";
+                        list = new List<Feature>(plugin.Features.All);
+                        break;
+                    default:
+                        title = currentCategory.ToUpperInvariant();
+                        list = plugin.Features.InCategory(currentCategory);
+                        break;
+                }
+                count = list.Count;
+            }
+            Label(Trim(title, 21), -0.220f, .223f, .011f, gray.color);
+            int pages = Mathf.Max(1, Mathf.CeilToInt(count / (float)ItemsPerPage));
+            page = Mathf.Clamp(page, 0, pages - 1);
+            int first = page * ItemsPerPage;
+
+            for (int i = 0; i < ItemsPerPage && first + i < count; i++)
+            {
+                int rowIndex = first + i;
+                float y = .172f - i * .073f;
+                if (screen == ScreenMode.Categories)
+                {
+                    string name = categories[rowIndex];
+                    AddButton(Trim(name, 25), 0f, y, .434f, .063f,
+                        buttonRest, () => OpenCategory(name));
+                    Label(">", .174f, y, .015f, gray.color);
                 }
                 else
                 {
-                    Feature feature = features[itemIndex];
-                    string name = Clip(feature.Label.ToUpperInvariant(), 19);
-                    string suffix = feature.ActionOnly ? " >" : feature.Enabled ? " ON" : "";
-                    AddButton(name + suffix, 0f, y, 0.427f, 0.057f,
-                        feature.Enabled ? white : row,
-                        () => plugin.Features.Activate(feature), 100 + itemIndex);
+                    Feature feature = list[rowIndex];
+                    AddButton(Trim(feature.Label, 19), -.033f, y,
+                        .363f, .063f, feature.Enabled ? active : buttonRest,
+                        () => ActivateFeature(feature));
+                    if (!feature.ActionOnly)
+                        Label(feature.Enabled ? "ON" : "OFF",
+                            .090f, y, .009f,
+                            feature.Enabled ? light.color : gray.color);
+                    AddButton(plugin.Features.IsFavorite(feature) ? "*" : "+",
+                        .193f, y, .056f, .063f,
+                        plugin.Features.IsFavorite(feature) ? active : buttonRest,
+                        () => FavoriteFeature(feature), true);
                 }
             }
 
-            AddButton("PREV", -0.128f, -0.307f, 0.178f, 0.054f,
-                row, () => SwitchPage(-1, totalPages), 4);
-            AddButton("NEXT", 0.128f, -0.307f, 0.178f, 0.054f,
-                row, () => SwitchPage(1, totalPages), 5);
-            Label("PAGE " + (page + 1) + "/" + totalPages, -0.209f, -0.359f, 0.010f, dim.color);
-            Label("TOUCH WITH RIGHT HAND", -0.080f, -0.359f, 0.009f, dim.color);
+            if (count == 0)
+                Label("NO ACTIVE ENTRIES", -.204f, .072f, .012f, gray.color);
+            AddButton("<", -.182f, -.287f, .062f, .052f,
+                page > 0 ? buttonRest : body,
+                () => ChangePage(-1, pages), true);
+            Label("PAGE " + (page + 1) + " / " + pages,
+                -.118f, -.287f, .011f, light.color);
+            AddButton(">", .184f, -.287f, .062f, .052f,
+                page < pages - 1 ? buttonRest : body,
+                () => ChangePage(1, pages), true);
 
-            currentRevision = plugin.Features.Revision;
+            Label("RIGHT HAND: TOUCH OR TRIGGER", -.222f, -.355f, .0082f,
+                gray.color);
+            AddButton("RESET", .175f, -.355f, .086f, .04f,
+                buttonRest, () =>
+                {
+                    plugin.Features.DisableAll();
+                    displayedRevision = -1;
+                }, true);
+
+            displayedRevision = plugin.Features.Revision;
         }
 
-        private void GoHome()
+        private void UpdateCategories()
         {
-            categoryIndex = -1;
+            categories.Clear();
+            foreach (string category in plugin.Features.Categories)
+            {
+                if (category == "Favorites" || category == "All") continue;
+                if (!categories.Contains(category)) categories.Add(category);
+            }
+        }
+
+        private void Open(ScreenMode mode)
+        {
+            screen = mode;
             page = 0;
-            currentRevision = -1;
+            displayedRevision = -1;
         }
 
-        private void OpenCategory(int index)
+        private void OpenCategory(string category)
         {
-            categoryIndex = index;
+            currentCategory = category;
+            screen = ScreenMode.Features;
             page = 0;
-            currentRevision = -1;
+            displayedRevision = -1;
         }
 
-        private void SwitchCategory(int amount)
+        private void ChangePage(int direction, int pages)
         {
-            var categories = plugin.Features.Categories;
-            if (categories.Count == 0) return;
-            categoryIndex = (categoryIndex + amount + categories.Count) % categories.Count;
-            page = 0;
-            currentRevision = -1;
+            page = Mathf.Clamp(page + direction, 0, pages - 1);
+            displayedRevision = -1;
         }
 
-        private void SwitchPage(int amount, int count)
+        private void ActivateFeature(Feature feature)
         {
-            page = (page + amount + count) % count;
-            currentRevision = -1;
+            plugin.Features.Activate(feature);
+            displayedRevision = -1;
         }
 
-        private void AddButton(string title, float x, float y,
-            float width, float height, Material material, Action callback, int id)
+        private void FavoriteFeature(Feature feature)
         {
-            Renderer plate = Cube("UI Button " + id, x, y, 0.043f, width, height, 0.009f, material);
-            string trimmed = Clip(title, 26);
-            float fontSize = trimmed.Length > 21 ? 0.010f : 0.012f;
-            Label(trimmed, x - width * 0.45f, y, fontSize,
-                material == white ? Color.black : Color.white);
-            buttons.Add(new TouchButton
+            plugin.Features.ToggleFavorite(feature);
+            displayedRevision = -1;
+        }
+
+        private void AddButton(string caption, float x, float y,
+            float width, float height, Material material,
+            Action action, bool centerLabel = false)
+        {
+            Cube(content, "Button border", x, y, .042f,
+                width + .003f, height + .003f, .009f, buttonOutline);
+            Renderer renderer = Cube(content, "Button " + caption,
+                x, y, ButtonPlane, width, height, .010f, material);
+            buttons.Add(new PhysicalButton
             {
                 X = x, Y = y, Width = width, Height = height,
-                Id = id, Click = callback, Surface = plate, Resting = material
+                Action = action,
+                Renderer = renderer,
+                Normal = material,
+                Hovered = material == active ? activeHover : buttonHover
             });
+
+            float font = height <= .051f ? .0105f : .0118f;
+            float xLabel = centerLabel ? x : x - width * .5f + .015f;
+            Color text = material == active ? light.color : light.color;
+            Label(caption, xLabel, y, font, text, centerLabel);
         }
 
-        private void Label(string value, float x, float y, float size, Color color)
+        private void Label(string value, float x, float y, float font,
+            Color color, bool center = false)
         {
-            var labelObject = new GameObject("UI Label " + value);
-            labelObject.transform.SetParent(root.transform, false);
-            labelObject.transform.localPosition = new Vector3(x, y, 0.057f);
-            labelObject.transform.localRotation = Quaternion.identity;
-            var label = labelObject.AddComponent<TextMesh>();
-            label.text = value;
-            label.anchor = TextAnchor.MiddleLeft;
-            label.alignment = TextAlignment.Left;
-            label.fontSize = 54;
-            label.characterSize = size;
-            label.color = color;
+            GameObject go = new GameObject("UI Text " + value);
+            go.transform.SetParent(content, false);
+            go.transform.localPosition = new Vector3(x, y, .063f);
+            go.transform.localRotation = Quaternion.identity;
+            TextMesh mesh = go.AddComponent<TextMesh>();
+            mesh.text = value;
+            mesh.anchor = center ? TextAnchor.MiddleCenter : TextAnchor.MiddleLeft;
+            mesh.alignment = center ? TextAlignment.Center : TextAlignment.Left;
+            mesh.fontSize = 54;
+            mesh.characterSize = font;
+            mesh.color = color;
         }
 
-        private static string Clip(string value, int count)
+        private static string Trim(string value, int max)
         {
             if (string.IsNullOrEmpty(value)) return "";
-            return value.Length <= count ? value : value.Substring(0, count - 2) + "..";
+            return value.Length <= max ? value :
+                value.Substring(0, max - 2) + "..";
         }
 
         internal void Dispose()
@@ -350,16 +562,21 @@ namespace Volas
             buttons.Clear();
             if (root != null) UnityEngine.Object.Destroy(root);
             root = null;
-            DestroyMaterial(ref black);
-            DestroyMaterial(ref charcoal);
-            DestroyMaterial(ref row);
-            DestroyMaterial(ref hover);
-            DestroyMaterial(ref lightHover);
-            DestroyMaterial(ref white);
-            DestroyMaterial(ref dim);
+            pointerDot = null;
+            pointerBeam = null;
+            Destroy(ref deepBlack);
+            Destroy(ref body);
+            Destroy(ref buttonRest);
+            Destroy(ref buttonHover);
+            Destroy(ref active);
+            Destroy(ref activeHover);
+            Destroy(ref accent);
+            Destroy(ref gray);
+            Destroy(ref light);
+            Destroy(ref buttonOutline);
         }
 
-        private static void DestroyMaterial(ref Material material)
+        private static void Destroy(ref Material material)
         {
             if (material == null) return;
             UnityEngine.Object.Destroy(material);
