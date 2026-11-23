@@ -9,6 +9,7 @@ namespace Volas
         private readonly VolasPlugin plugin;
         private Rect window = new Rect(55f, 55f, 505f, 560f);
         private Vector2 scroll;
+        private Vector2 categoryScroll;
         private int selectedCategory;
         private bool resizing;
         private string search = "";
@@ -91,14 +92,17 @@ namespace Volas
             if (categories.Count > 0)
             {
                 selectedCategory = Mathf.Clamp(selectedCategory, 0, categories.Count - 1);
+                categoryScroll = GUILayout.BeginScrollView(categoryScroll, true, false,
+                    GUILayout.Height(44f));
                 GUILayout.BeginHorizontal();
                 for (int i = 0; i < categories.Count; i++)
                 {
                     if (GUILayout.Button(categories[i], i == selectedCategory ? enabledStyle : disabledStyle,
-                        GUILayout.Height(35f)))
+                        GUILayout.Height(34f), GUILayout.MinWidth(79f)))
                         selectedCategory = i;
                 }
                 GUILayout.EndHorizontal();
+                GUILayout.EndScrollView();
                 GUILayout.Space(9f);
                 GUILayout.BeginHorizontal();
                 GUILayout.Label("SEARCH", smallStyle, GUILayout.Width(55f));

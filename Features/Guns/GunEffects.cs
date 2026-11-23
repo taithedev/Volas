@@ -68,7 +68,16 @@ namespace Volas
 
         private void OnFire(GunTarget target)
         {
-            if (!target.HasHit || !AnyEnabled) return;
+            if (!AnyEnabled) return;
+
+            if (Dash && plugin.Game.IsSoloOrModdedRoom())
+            {
+                var body = plugin.Game.Body;
+                if (body != null)
+                    body.AddForce(target.Direction * 5.5f, ForceMode.VelocityChange);
+            }
+
+            if (!target.HasHit) return;
 
             if (Marker) MakeDot("Marker", target.Point + target.Normal * 0.05f, 0.13f, plugin.Accent, 45f);
             if (Paint) PlacePaint(target);
@@ -99,12 +108,6 @@ namespace Volas
                 grappleLocked = true;
             }
 
-            if (Dash && plugin.Game.IsSoloOrModdedRoom())
-            {
-                Rigidbody body = plugin.Game.Body;
-                if (body != null)
-                    body.AddForce(target.Direction * 5.5f, ForceMode.VelocityChange);
-            }
         }
 
         internal void Tick()
@@ -306,7 +309,7 @@ namespace Volas
             var head = plugin.Game.HeadCamera;
             if (head != null)
                 display.transform.rotation = Quaternion.LookRotation(
-                    (display.transform.position - head.transform.position).normalized, Vector3.up);
+                    (head.transform.position - display.transform.position).normalized, Vector3.up);
         }
 
         private GameObject MakeDot(string name, Vector3 position, float size, Color color, float lifetime)
@@ -336,7 +339,7 @@ namespace Volas
             var head = plugin.Game.HeadCamera;
             if (head != null)
                 go.transform.rotation = Quaternion.LookRotation(
-                    (go.transform.position - head.transform.position).normalized, Vector3.up);
+                    (head.transform.position - go.transform.position).normalized, Vector3.up);
             Track(go, lifetime);
         }
 

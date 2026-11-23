@@ -3,7 +3,8 @@
 This project separates the BepInEx entry point from its menu and feature systems. There is no generic `src` directory.
 
 - **Core:** plugin lifecycle, feature registration, state transitions, favorites, rollback and error isolation. `FeatureCatalog.cs` invokes individual category registries.
-- **Features:** each feature category owns its registration file; movement and visuals have separate runtime implementations. This makes it easier to add a feature without growing a single massive catalog.
+- **GunLib:** shared local right-controller raycast and reticle with a `Fired` event. GunMods subscribe to the event and own effect lifetime/cleanup.
+- **Features:** each feature category owns its registration file; movement, gun effects and visuals have separate runtime implementations. This makes it easier to add a feature without growing a single massive catalog.
 - **Game:** `GameBridge` resolves optional Gorilla Tag and Photon runtime types through reflection. Type rescans are throttled. If fields change, log an error rather than pretending the mod works.
 - **UI/Desktop:** IMGUI desktop panel with drag/resize, search, favorite stars, appearance sliders and status text.
 - **UI/VR:** hand-attached world-space menu rendered from Unity primitives and TextMesh, with right-hand touch buttons and paged categories.
