@@ -28,6 +28,18 @@ The script tries both supported target frameworks automatically unless you force
 
 The game installation must contain `Gorilla Tag_Data/Managed/UnityEngine.CoreModule.dll`, the relevant Unity engine modules, and `BepInEx/core/BepInEx.dll`. These libraries are loaded from **your own game installation**. Do not copy random versions from unrelated games into the repo.
 
+## VR menu not appearing when Y is pressed
+
+Pull and build the latest main branch, then reinstall Volas.dll in BepInEx/plugins. Updating source alone does not update an installed DLL.
+
+Press **F7** on your keyboard to test the physical menu independently of controller Y. Alternatively use **F6 > Settings > OPEN VR MENU / TEST**. The Settings footer reports the menu render/tracking status.
+
+The menu now checks Gorilla Tag's ControllerInputPoller leftControllerSecondaryButton first (including SteamVR), then XR and legacy controller input. If left-hand tracking is missing, the panel appears in front of the active game camera instead of silently hiding.
+
+Aim with your right controller and press trigger or touch the raised buttons. The selection ray is visible even over empty menu regions. You can use your mouse on the physical panel during PC preview.
+
+If F7 does not show the menu either, read BepInEx/LogOutput.log for 'Volas physical menu rendered', 'no camera', or 'physical menu update failed'. Those messages distinguish rendering from controller input issues.
+
 ## No in-game Volas menu
 
 Check `Gorilla Tag/BepInEx/plugins/Volas.dll`, then `BepInEx/LogOutput.log` for the Volas startup message and runtime assembly versions. Press F6 for desktop UI or left Y for VR UI.
