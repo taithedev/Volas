@@ -187,7 +187,7 @@ namespace Volas
                 "Zoom the non-VR camera to 45 degrees; disable to restore original FOV.",
                 p =>
                 {
-                    if (XRSettings.enabled)
+                    if (InputDevices.GetDeviceAtXRNode(XRNode.Head).isValid)
                         throw new InvalidOperationException("Camera zoom is desktop-only.");
                     activeCamera = p.Game.HeadCamera;
                     if (activeCamera == null) throw new InvalidOperationException("No camera.");
