@@ -10,13 +10,20 @@ For the closest proportions, the default window is 760 × 500 pixels. Older inst
 
 The interface uses programmatically constructed **Unity uGUI**: Canvas, CanvasScaler, Image, Text, Button, InputField, ScrollRect, Slider, RectMask2D, EventSystem and pointer-drag handlers. No IMGUI call draws the desktop window. The UI creates rounded 9-slice sprites at runtime and uses only the game's local Unity UI assemblies. True background blur is not currently present; translucent layers approximate the reference.
 
-## VR
+## Physical VR menu
 
-The in-game menu in `UI/VR/VrMenu.cs` is a physical tablet near the left hand, matching the handheld-menu references in composition without copying their assets. It has a 3D back plate, white outline, tactile button meshes and world-space labels. It initially opens to **Categories**; select a category to view its mods. **HOME**, category arrows, page navigation and close are all physical buttons.
+The in-world menu lives in `UI/VR/VrMenu.cs`. It constructs a **raised 3D OLED tablet** with a charcoal body, violet edge trim, clickable physical button meshes, and world-space TextMesh labels. No IMGUI or Canvas is used for the physical wrist panel. Its content rebuilds whenever the registry changes and stays attached to the left tracked controller with smoothed tracking and headset-facing rotation.
 
-Use left Y to toggle. Bring the right hand/controller near a button to touch, or point at a nearby button and press the right trigger. Contacts are debounced so holding a finger against a navigation button does not continuously change pages.
+- **Left Y:** open / close.
+- **Right hand:** move the controller tip onto a raised button to press it, or aim at a button and press the right trigger. The pointer supports both common controller aim axes and shows a local beam and selection dot.
+- **HOME / CATS:** show registered feature categories; tap a category to browse.
+- **FAV / ON / ALL:** browse saved favorites, currently enabled entries, or the full feature catalog.
+- **+ / *:** save or remove a feature from favorites.
+- **< / >:** change pages. Each page displays up to 6 features with ON/OFF feedback.
+- **RESET:** disable all active Volas features.
+- Compatible controllers receive a short haptic pulse on selection; input is debounced to avoid rapid repeats.
 
-The tablet's position follows the left controller and rotates toward the headset so it stays readable. Desktop → Settings exposes the **VR Size** and **Wrist Left/Right / Up/Down / Forward** sliders for adjustment. The Settings values persist in BepInEx.
+The menu uses only registered Volas features and does not synthesize fake mod entries. Configuration in BepInEx stores the menu's scale and wrist offsets, but the current desktop uGUI settings page exposes only compact sizing; other offset values can be adjusted in the BepInEx configuration file.
 
 ## Theme
 
