@@ -192,6 +192,8 @@ namespace Volas
                 Disable(f);
             if (plugin.Guns != null)
                 plugin.Guns.Reset();
+            if (plugin.ExtraVisuals != null)
+                plugin.ExtraVisuals.Reset();
         }
     }
 }

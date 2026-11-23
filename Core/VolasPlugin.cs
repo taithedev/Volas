@@ -14,6 +14,7 @@ namespace Volas
         internal GameBridge Game { get; private set; }
         internal FeatureRegistry Features { get; private set; }
         internal VisualEffects Effects { get; private set; }
+        internal ExtraVisualEffects ExtraVisuals { get; private set; }
         internal GunLib Gun { get; private set; }
         internal GunEffects Guns { get; private set; }
         internal MovementEffects Movement { get; private set; }
@@ -58,6 +59,7 @@ namespace Volas
             DesktopOpen = Settings.OpenDesktopOnLaunch.Value;
             Game = new GameBridge();
             Effects = new VisualEffects(this);
+            ExtraVisuals = new ExtraVisualEffects(this);
             Gun = new GunLib(this);
             Guns = new GunEffects(this);
             Movement = new MovementEffects(this);
@@ -97,6 +99,7 @@ namespace Volas
             Guns.Tick();
             Movement.Tick();
             Effects.Tick();
+            ExtraVisuals.Tick();
             Vr.Tick();
         }
 
@@ -123,6 +126,7 @@ namespace Volas
             if (Guns != null) Guns.Dispose();
             if (Gun != null) Gun.Dispose();
             if (Effects != null) Effects.Dispose();
+            if (ExtraVisuals != null) ExtraVisuals.Dispose();
             if (Vr != null) Vr.Dispose();
             if (desktop != null) desktop.Dispose();
             Instance = null;

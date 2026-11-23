@@ -41,6 +41,25 @@ namespace Volas
                             "breadcrumb", "Visuals", "Path markers", "Leave a temporary trail of local glowing spheres.",
                             p => p.Effects.Breadcrumbs = true,
                             p => p.Effects.Breadcrumbs = false));
+            registry.Add(new Feature(
+                "headlamp", "Visuals", "VR headlamp", "A bright local spotlight follows your headset.",
+                p => p.ExtraVisuals.Headlamp = true,
+                p => p.ExtraVisuals.Headlamp = false));
+
+            registry.Add(new Feature(
+                "orbiting", "Visuals", "Orbiting orbs", "Three glowing spheres orbit locally around the headset.",
+                p => p.ExtraVisuals.OrbitingOrbs = true,
+                p => p.ExtraVisuals.OrbitingOrbs = false));
+
+            registry.Add(new Feature(
+                "body_aura", "Visuals", "Body aura", "A glowing local ring follows your body.",
+                p => p.ExtraVisuals.BodyAura = true,
+                p => p.ExtraVisuals.BodyAura = false));
+
+            registry.Add(new Feature(
+                "hand_axes", "Visuals", "Hand axis guide", "Show orientation axes on the right controller.",
+                p => p.ExtraVisuals.HandAxes = true,
+                p => p.ExtraVisuals.HandAxes = false));
         }
     }
 }
