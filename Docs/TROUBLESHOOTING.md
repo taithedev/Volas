@@ -1,23 +1,52 @@
-# Troubleshooting Volas
+# Volas build troubleshooting (v1.3)
 
-## Building the entire menu
+## Open the Visual Studio solution, not Folder View
 
-Open Volas.sln and select Release, then Build > Build Solution (Ctrl+Shift+B). There is only one C# project, which explicitly includes all .cs files under Core, Features, Game, Settings, and UI. The result is one Volas.dll.
+Your screenshot shows **Solution Explorer — Folder View**. In Visual Studio choose **File → Open → Project/Solution → Volas.sln** to get **Build → Build Solution**. Select **Release | Any CPU** and press **Ctrl+Shift+B**.
 
-First run build.bat at least once to auto-detect the Steam installation and save the path for Visual Studio in Volas.Local.props. Use build.bat -Install to build and copy the plugin into BepInEx/plugins.
+You can also simply run `build.bat` from the repository. For auto-install use `build.bat -Install`. The helper stores the game directory in `Volas.Local.props` (not committed to Git) so future Visual Studio builds can find it.
 
-## Cannot find Gorilla Tag
+## CS0012: MonoBehaviour is defined in an assembly that is not referenced
 
-Use build.bat -GamePath "FULL_PATH_TO_GORILLA_TAG". The path must be the directory containing Gorilla Tag_Data, not the Managed directory. The script also scans Steam libraryfolders.vdf and Steam/SteamLibrary folders on available drives.
+This is **not caused by the presence or absence of `src/`**. It means the compiler cannot resolve a required Unity assembly reference or is mixing incompatible Unity/BepInEx runtime assemblies.
 
-## BepInEx 5 / Unity assemblies missing
+The v1.3 project explicitly compiles all source folders and links the installed game's **UnityEngine*.dll** modules as well as `BepInEx.dll`. The earlier project accidentally skipped `GunLib/`; that is also fixed.
 
-The build uses the DLLs from your own installed game. It checks BepInEx/core/BepInEx.dll and required UnityEngine module DLLs in Gorilla Tag_Data/Managed before invoking the compiler. Install the correct BepInEx 5 Mono loader and verify the game path.
+Try these in order:
 
-## Compiler errors
+1. Pull current `main` in Visual Studio (**Git → Pull**). Open `Volas.sln`, not a folder.
+2. Close the game. Run `build.bat` to locate the installed game folder. If not found, pass `-GamePath "FULL_PATH_TO_GAME"`.
+3. Ensure **BepInEx 5 Mono**, not an IL2CPP-only loader, matches this installation.
+4. If automatic targeting fails, run `build.bat -Framework netstandard2.1`; alternatively `build.bat -Framework net472` if compatible.
+5. In Visual Studio **Build → Clean Solution**, then **Rebuild Solution**. You may delete `bin/` and `obj/` if they contain stale outputs.
+6. Read the **full first CS0012 line** in Output; its named assembly is the precise file that must be reconciled, usually `UnityEngine.CoreModule`, `UnityEngine`, or `netstandard`.
 
-For Unity/BepInEx reference errors, read the FIRST compiler error in the build output. Newer Unity Mono installs with netstandard.dll default to netstandard2.1; other installs default to net472. Try -Framework net472 or -Framework netstandard2.1 only if needed for the specific game's assemblies. The net472 target may require the .NET Framework 4.7.2 targeting pack.
+The script tries both supported target frameworks automatically unless you force one. A failed local build cannot be diagnosed completely from a truncated error line.
 
-## DLL built but menu not showing
+## Missing reference DLL
 
-Use build.bat -Install or copy bin/Release/<framework>/Volas.dll into Gorilla Tag/BepInEx/plugins. Start Gorilla Tag on PC, press F6 for desktop menu or Y on left controller for VR menu. Check BepInEx/LogOutput.log for a Volas load error. A successful compiler run does not prove runtime compatibility.
+The game installation must contain `Gorilla Tag_Data/Managed/UnityEngine.CoreModule.dll`, the relevant Unity engine modules, and `BepInEx/core/BepInEx.dll`. These libraries are loaded from **your own game installation**. Do not copy random versions from unrelated games into the repo.
+
+## No in-game Volas menu
+
+Check `Gorilla Tag/BepInEx/plugins/Volas.dll`, then `BepInEx/LogOutput.log` for the Volas startup message and runtime assembly versions. Press F6 for desktop UI or left Y for VR UI.
+
+## Pointer not visible
+
+Enable at least one Gun Mods feature, hold grip on the selected controller, and ensure a hand transform resolves. Change controller selection or aim axis in the desktop Gun Mods panel if needed. No effects are verified in the latest game without local testing.
+
+## Get useful build diagnostics
+
+Open a terminal in the cloned repository and run:
+
+```powershell
+.\build.bat -GamePath "FULL_PATH_TO_GAME"
+```
+
+For a complete log, use PowerShell:
+
+```powershell
+.\build.ps1 -GamePath "FULL_PATH_TO_GAME" *> volas-build.log
+```
+
+Share the **first full error line**, framework target, and the named missing assembly to diagnose a remaining failure.

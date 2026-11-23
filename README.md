@@ -1,43 +1,71 @@
-# Volas
+# Volas v1.3 — Gorilla Tag PCVR mod menu
 
-Volas is a C# PCVR Gorilla Tag mod menu built as a BepInEx 5 Mono plugin. The complete menu is ONE DLL containing Core, Features, Game, Settings, Desktop UI, and VR UI.
+Volas is a modular C# / BepInEx 5 Mono mod menu with a dark OLED desktop UI and in-world VR menu. **Every source folder compiles into a single Volas.dll** — including `GunLib/` and `src/`.
 
-> The source has not been compiled here against your installed game assemblies or tested in-game. Building the project and verifying runtime compatibility are separate steps.
+**Build status:** Source uploaded and statically reviewed; the DLL has **not** been compiled against your specific game or verified in-game here. Game DLLs and BepInEx are not included in the repository.
 
-## Build the entire menu (Windows)
+## Build the entire project in Windows
 
-1. Clone the repo and open Volas.sln in Visual Studio.
-2. Install the .NET SDK, Gorilla Tag PCVR, and BepInEx 5 Mono.
-3. Run build.bat in the repo root. This locates the Steam game directory, checks required Unity/BepInEx DLLs, and builds the WHOLE Volas.sln in Release mode.
-4. To also copy the built DLL into the game, open a terminal in the repo folder and run:
+1. Install PC Gorilla Tag, BepInEx **5 Mono**, and Visual Studio with the .NET desktop workload and the latest .NET SDK.
+2. Clone the repository using Git, or in Visual Studio **Git → Clone Repository**.
+3. In Visual Studio, choose **File → Open → Project/Solution** and open `Volas.sln`. Don't use *Open Folder* if you want the usual **Build Solution** command.
+4. To detect the game installation and save its location for Visual Studio, double-click `build.bat` once. It creates the gitignored `Volas.Local.props`.
+5. Select **Release**, **Any CPU**, then **Build → Build Solution** (`Ctrl+Shift+B`).
+6. For a full build and automatic installation to the game, run `build.bat -Install`.
 
-    .\build.bat -Install
+For a different Steam library, use:
 
-5. The first successful script run creates Volas.Local.props (gitignored) so Visual Studio also knows the game directory. Select Release and use Build > Build Solution (Ctrl+Shift+B) to build again.
+```powershell
+.\build.bat -GamePath "D:\SteamLibrary\steamapps\common\Gorilla Tag" -Install
+```
 
-If the automatic Steam scan misses the game, give the full installed game folder:
+The build helper automatically tries `netstandard2.1` / `net472` depending on installed Unity assemblies, with a fallback when no explicit framework is forced. You can force either using `-Framework netstandard2.1` or `-Framework net472`.
 
-    .\build.bat -GamePath "D:\SteamLibrary\steamapps\common\Gorilla Tag" -Install
+Output: `bin\Release\<framework>\Volas.dll` — with `-Install`, it is copied into `Gorilla Tag\BepInEx\plugins\`. See [Build troubleshooting](Docs/TROUBLESHOOTING.md) for the CS0012 MonoBehaviour diagnostic from Visual Studio.
 
-You can alternatively set the VOLAS_GAME_DIR environment variable. The build detects netstandard2.1 vs net472 from the installed Unity runtime; override with -Framework net472 or -Framework netstandard2.1 if needed.
+## 55 feature entries
 
-Output: bin/Release/<framework>/Volas.dll. With -Install, the DLL is copied to the game's BepInEx/plugins directory. If using net472, the .NET Framework 4.7.2 targeting pack may also be required.
+| Category | Mods |
+| --- | --- |
+| Movement (4) | Speed boost, high jump, float gravity, hand flight |
+| Visuals (17) | Hand orbs, rainbow hands, hand trails, palm lights, pointer beam, halo, path markers, headlamp, orbiting orbs, body aura, hand axes, wrist rings, pulsing wrist rings, neon crown, floor circle, rainbow floor circle, controller cubes |
+| Gun Mods (20) | Marker, paint, beacon, ring, pulse, confetti, trail, inspect, ruler, range finder, coordinates, spotlight, grapple, dash, surface grid, spiral stamp, arrow marker, VOLAS sign, sparkles, checkerboard stamp |
+| Telemetry (5) | FPS HUD, clock HUD, position HUD, heading HUD, desktop crosshair |
+| Utilities (5) | Audio mute, 90 FPS target, VSync off, copy coordinates, log room status |
+| Settings (4) | Compact VR menu, rainbow accent, desktop panel toggle, disable all |
 
-## Controls
+Most features create local effects or change your own display. Locomotion-changing mods are disabled in ordinary multiplayer rooms by default; game-version compatibility may vary. No network-targeted disruption or anti-ban functions are included.
 
-- F6: open/close desktop panel.
-- Left-controller Y: open/close VR hand menu.
-- End: disable all active features.
+## GunLib appearance studio
 
-## Project structure
+GunLib is a **VR controller pointer** with configurable **three beam styles** (straight, wave, spiral), **four reticle styles** (orb, block, ring, diamond), optional glow, rainbow color, pulse animation, hand choice, beam width, range, animation speed, stamp size, and temporary effect lifetime. The desktop panel includes **OCEAN**, **NEON**, and **PRISM** appearance presets.
 
-- Core: plugin, registry and feature catalog.
-- Features: Movement, Visuals, Telemetry, Utilities and Settings.
-- Game: game/runtime bridge.
-- UI: desktop and VR menus.
-- Settings: configuration.
-- Build: full-solution Windows build tool.
+Controls: hold selected-hand **grip** to aim, press **trigger** to activate enabled pointer effects. All effects remain client-side. See [GunLib controls and details](Docs/GUNLIB.md).
 
-The repository currently registers 25 features. Some movement effects are limited to solo/recognized MODDED rooms; features and game-version compatibility still require actual in-game testing.
+## Project layout
 
-More information: Docs/TROUBLESHOOTING.md and Docs/ARCHITECTURE.md.
+```text
+Volas/
+  Core/                 plugin lifecycle, registry, feature catalog
+  Features/
+    Guns/               GunFeatures, GunEffects, CreativeGunEffects
+    Movement/           scoped local locomotion modes
+    Visuals/            standard effects, decorations, visual registries
+    Telemetry/          FPS, position, clock
+    Utilities/          audio, app/display utilities
+    Settings/           feature action registries
+  GunLib/               shared VR raycaster, effects-agnostic pointer
+  Game/                 runtime game adapter
+  UI/
+    Desktop/            resizable OLED control panel + pointer studio
+    VR/                 hand menu
+  Settings/             persistent BepInEx configuration
+  src/Diagnostics/      runtime assembly version reporting
+  Build/                full solution build script
+  Docs/                 build and extension guides
+  Volas.sln
+  Volas.csproj
+  build.bat
+```
+
+No proprietary game DLLs are distributed. The Visual Studio project links to **your installed Unity and BepInEx game files**.

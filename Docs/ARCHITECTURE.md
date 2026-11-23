@@ -1,26 +1,24 @@
-# Volas architecture
+# Volas v1.3 architecture
 
-This project separates the BepInEx entry point from its menu and feature systems. There is no generic `src` directory.
+The plugin is packaged into **one Volas.dll**. Source files stay in separate folders so the project remains maintainable:
 
-- **Core:** plugin lifecycle, feature registration, state transitions, favorites, rollback and error isolation. `FeatureCatalog.cs` invokes individual category registries.
-- **GunLib:** shared local right-controller raycast and reticle with a `Fired` event. GunMods subscribe to the event and own effect lifetime/cleanup.
-- **Features:** each feature category owns its registration file; movement, gun effects and visuals have separate runtime implementations. This makes it easier to add a feature without growing a single massive catalog.
-- **Game:** `GameBridge` resolves optional Gorilla Tag and Photon runtime types through reflection. Type rescans are throttled. If fields change, log an error rather than pretending the mod works.
-- **UI/Desktop:** IMGUI desktop panel with drag/resize, search, favorite stars, appearance sliders and status text.
-- **UI/VR:** hand-attached world-space menu rendered from Unity primitives and TextMesh, with right-hand touch buttons and paged categories.
-- **Settings:** BepInEx configuration entries for hotkeys, favorites, colors, scale and desktop window position.
-- **Build:** PowerShell build helper, keeping `build.ps1` at the root for backward compatibility.
+- `Core/`: BepInEx plugin, feature registry and category composition.
+- `GunLib/`: client-side VR raycaster, beam and reticle rendering, effect events.
+- `Features/Guns/`: twenty pointer modes split between `GunEffects.cs` and `CreativeGunEffects.cs`, registered in `GunFeatures.cs`.
+- `Features/Visuals/`: eleven earlier visual features plus six additional `VisualDecorations` (wrist rings, crown, floor circle and controller cubes).
+- `Features/Movement/`: local locomotion modes with solo/MODDED room checks.
+- `Features/Telemetry/`, `Features/Utilities/`, `Features/Settings/`: independent catalog sections.
+- `Game/`: game type and Photon room bridge with throttled type discovery.
+- `Settings/`: persistent BepInEx configuration entries with bounded values.
+- `UI/Desktop/`: searchable OLED panel, appearance presets and display settings.
+- `UI/VR/`: touch-driven paged hand menu.
+- `src/Diagnostics/`: runtime assembly identification (compiled as part of the same DLL).
+- `Build/`: Windows build helper with automatic game discovery and target framework fallback.
 
-## Adding a feature
+## Compilation
 
-1. Decide which category it belongs in, for example `Features/Visuals/VisualFeatures.cs`.
-2. Register a uniquely named `Feature` using real enable/disable delegates.
-3. Keep runtime objects and cleanup inside the corresponding effects service.
-4. Test enabling, disabling, resetting, reconnecting and leaving MODDED rooms.
-5. For a game movement effect, use `needsModdedRoom: true`; avoid public-room disruption.
+`Volas.csproj` explicitly includes `Core/**/*.cs`, `Features/**/*.cs`, `Game/**/*.cs`, `GunLib/**/*.cs`, `Settings/**/*.cs`, `UI/**/*.cs` and optional `src/**/*.cs`. It references Unity DLLs from the installed PCVR game only.
 
-`FeatureRegistry` centrally handles toggles, favorites, error reporting, and room compatibility. Changing tabs, favorites, or feature toggles increments its revision so the VR menu can redraw.
+When adding a new module, put it in the correct feature folder and register it through `FeatureCatalog` or an existing category registrar. Any created local GameObjects or Materials should be cleaned up when mods are disabled, on End/reset, and on plugin unload.
 
-## Platform constraints
-
-Volas targets .NET Framework 4.7.2 and references BepInEx 5 and Unity engine DLLs directly from the installed PC game. The repository does not ship those proprietary binaries. A successful local build does not imply the features have been tested against every game update or headset.
+No code is deployed to game servers. This remains an unverified source build until locally compiled and tested.

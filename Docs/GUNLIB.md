@@ -1,48 +1,43 @@
-# Volas GunLib
+# Volas v1.3 GunLib — local VR pointer system
 
-Volas 1.2 provides its own **local-only VR pointer library** in `GunLib/GunLib.cs`. It does not copy any third-party GunLib project and does not send Photon RPCs, alter hit colliders, or interact with other players' accounts.
+GunLib is a modular client-side VR pointer and effect library, not a player-targeting or damage system. No Photon RPCs are sent. It never alters other players' objects.
 
-## Controls
+## Input
 
-- **Right grip:** aim with the pointer. The active mods must include at least one entry in the Gun Mods category.
-- **Right trigger:** execute any active click-based pointer mods. Hold it for trail drawing or grapple.
-- **Left Y:** show the VR hand menu.
-- **F6:** open the desktop menu and use the Gun Mods category to change range, reticle diameter, or aim-axis mode.
-- **End:** disable all Volas mods and clear locally spawned gun effects.
+- Hold **grip** on the configured right or left controller to show the pointer.
+- Press **trigger** to activate enabled effects on a targeted static surface.
+- Open the desktop menu with **F6** and choose **Gun Mods** for customization.
+- Press **End** to disable all active mods and clear decorative effects.
 
-The pointer's default axis is **-up** from the right-hand controller transform. Enable **Aim from controller forward axis** in the desktop menu if your controller requires **+forward** instead.
+The aim transform defaults to the controller **-up** direction, with an option for **+forward**. The headset/controller game runtime must expose compatible hand transforms.
 
-## Features
+## Appearance controls
 
-| Name | Behavior | Lifetime/scope |
-| --- | --- | --- |
-| Marker gun | Places a small luminous local marker on a surface | Temporary |
-| Paint gun | Places a colored disc on the surface | Temporary |
-| Beacon gun | Places a tall local light marker | Temporary |
-| Ring gun | Draws a circle along the target normal | Temporary |
-| Pulse gun | Draws an animated expanding ring | Temporary |
-| Confetti gun | Adds small colored local spheres on activation | Temporary |
-| Trail gun | Paints tiny local dots while trigger is held | Temporary |
-| Inspect gun | Displays the collider's local object name and layer | While aiming |
-| Ruler gun | Two trigger presses measure distance between surfaces | Temporary |
-| Range finder | Displays distance to targeted surface | While aiming |
-| Coordinate gun | Displays the targeted X/Y/Z location | While aiming |
-| Spotlight gun | Illuminates the targeted surface locally | While aiming |
-| Grapple gun | Pulls your own Rigidbody toward the targeted surface | Solo/recognized MODDED room |
-| Dash gun | Pushes your own Rigidbody along the aim direction | Solo/recognized MODDED room |
+- **Beam**: Straight, Wave, Spiral
+- **Reticle**: Orb, Block, Ring, Diamond
+- **Visuals**: soft glow, rainbow cycling, pulsing width, animation speed
+- **Geometry**: beam width, pointer range, reticle diameter
+- **Input**: right/left controller, alternate aim axis
+- **Stamps**: size and automatic expiry time
+- **Presets**: OCEAN (cyan ring), NEON (magenta spiral), PRISM (rainbow wave)
 
-Multiple pointer modes can be enabled simultaneously. Effects are local, and spawned objects use bounded counts or lifetimes. Aim does not automatically trigger a click action.
+Preferences persist in `BepInEx/config/com.volas.gtag.cfg`.
 
-## API for future modules
+## Twenty effect modes
 
-The public `Volas.GunLib.Instance` is available while the plugin is running. It exposes:
+**Original 14:** Marker, Paint, Beacon, Ring, Pulse, Confetti, Trail, Inspect, Ruler, Range, Coordinates, Spotlight, Grapple, Dash.
 
-- `IsAiming`, `TriggerHeld`, `FiredThisFrame`.
-- `Target` (a `GunTarget` with `HasHit`, `Point`, `Normal`, `Distance`, `Direction`, and `Collider`).
-- `event Action<GunTarget> Fired` for trigger-down callbacks.
+**New decorative 6:** Surface Grid (local aligned grid), Spiral Stamp, Arrow Marker, VOLAS Sign, Sparkle Burst, Checkerboard Stamp.
 
-New features register with `FeatureRegistry` in `Features/Guns/GunFeatures.cs`, with runtime work in `GunEffects.cs` or a separate effect service. Do not attach unmanaged objects without a reset/disposal path.
+Surface decorations have bounded lifetimes and are cleared with reset. Grapple and dash affect only your own Rigidbody and require solo or a recognized MODDED room. This does not grant permission to use the mod in public matchmaking.
 
-## Compatibility limits
+## Code
 
-Volas is source-only pending a successful local compile and in-game test with your Gorilla Tag build and headset. The game must expose the expected hand transforms for the VR pointer; if the pointer is backwards, change its axis in the desktop Gun Mods tab. Grapple and dash additionally require the game's player Rigidbody and MODDED/solo compatibility checks to succeed. These features may be incompatible with some game or VR-runtime versions.
+- `GunLib/GunLib.cs`: `GunTarget`, `GunLib.Instance`, `Fired` event, targeting, color and reticle renderer.
+- `Features/Guns/GunFeatures.cs`: 20 feature toggles.
+- `Features/Guns/GunEffects.cs`: 14 existing pointer modes.
+- `Features/Guns/CreativeGunEffects.cs`: six additional temporary decorative stamps.
+- `Settings/VolasConfiguration.cs`: settings with input bounds.
+- `UI/Desktop/DesktopMenu.cs`: pointer appearance editor.
+
+This is source-only until it builds with a specific installation of Gorilla Tag and BepInEx 5 Mono. A successful C# compilation does not guarantee game or headset compatibility.
