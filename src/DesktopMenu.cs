@@ -68,7 +68,10 @@ namespace Volas
 
         private void DrawWindow(int id)
         {
-            GUI.DrawTexture(new Rect(0f, 0f, window.width, 5f), white, ScaleMode.StretchToFill, true, 0f, plugin.Accent, 0f, 0f);
+            Color savedColor = GUI.color;
+            GUI.color = plugin.Accent;
+            GUI.DrawTexture(new Rect(0f, 0f, window.width, 5f), white);
+            GUI.color = savedColor;
             GUI.Label(new Rect(20f, 13f, 225f, 33f), "VOLAS", titleStyle);
             GUI.Label(new Rect(window.width - 192f, 21f, 170f, 25f), "GTAG / BepInEx 5 / v1.0", smallStyle);
             GUI.Label(new Rect(22f, 52f, window.width - 43f, 22f), plugin.Game.RoomSummary(), smallStyle);
