@@ -19,6 +19,9 @@ namespace Volas
         private readonly VolasPlugin plugin;
         private readonly List<PhysicalButton> buttons = new List<PhysicalButton>();
         private readonly List<string> categories = new List<string>();
+        private readonly List<InputDevice> rightControllerCandidates = new List<InputDevice>(4);
+        private float nextMissingCameraLog;
+        internal string Status { get; private set; } = "VR menu ready";
         private GameObject root;
         private Transform content;
         private GameObject pointerDot;
@@ -63,35 +66,76 @@ namespace Volas
 
         internal void Tick()
         {
-            Transform anchor = plugin.Game.LeftHand;
-            Camera camera = plugin.Game.HeadCamera;
-            if (!plugin.VrOpen || anchor == null || camera == null)
+            if (!plugin.VrOpen)
             {
                 if (root != null) root.SetActive(false);
-                if (pointerDot != null) pointerDot.SetActive(false);
-                if (pointerBeam != null) pointerBeam.gameObject.SetActive(false);
+                HidePointer();
                 if (wasOpen)
                 {
                     previousTrigger = false;
-                    touchArmed = true;
+                    touchArmed = false;
                     firstPosition = true;
                     wasOpen = false;
                     hovered = -1;
                 }
+                Status = "Closed - left Y, F7, or PC settings";
                 return;
             }
 
-            if (root == null && !CreateMenu()) return;
+            Camera camera = plugin.Game.HeadCamera;
+            if (camera == null)
+            {
+                Status = "Cannot display VR menu: no active headset/game camera";
+                if (root != null) root.SetActive(false);
+                if (Time.unscaledTime >= nextMissingCameraLog)
+                {
+                    nextMissingCameraLog = Time.unscaledTime + 8f;
+                    plugin.Log.LogWarning("Volas VR menu is open but no camera is available. Check your headset and game camera.");
+                }
+                return;
+            }
+
+            if (root == null && !CreateMenu())
+            {
+                Status = "VR menu material initialization failed - check BepInEx log";
+                return;
+            }
             root.SetActive(true);
 
-            Vector3 position = anchor.TransformPoint(new Vector3(
-                plugin.Settings.VrOffsetX.Value,
-                plugin.Settings.VrOffsetY.Value,
-                plugin.Settings.VrOffsetZ.Value));
-            Vector3 facing = camera.transform.position - position;
+            Transform anchor = plugin.Game.LeftHand;
+            Transform head = camera.transform;
+            Vector3 position;
+            bool preview = anchor == null;
+            if (!preview)
+            {
+                position = anchor.TransformPoint(new Vector3(
+                    plugin.Settings.VrOffsetX.Value,
+                    plugin.Settings.VrOffsetY.Value,
+                    plugin.Settings.VrOffsetZ.Value));
+                Vector3 offset = position - head.position;
+                if (offset.sqrMagnitude < 0.075f || offset.sqrMagnitude > 2.0f ||
+                    Vector3.Dot(head.forward, offset) < -0.25f)
+                    preview = true;
+            }
+            if (preview)
+            {
+                // Do not silently hide the entire menu when a hand transform is
+                // unavailable or outside the view. Show a head-anchored preview.
+                position = head.position + head.forward * 0.75f -
+                    head.right * 0.12f - head.up * 0.01f;
+                Status = anchor == null
+                    ? "Head preview: left controller pose unavailable"
+                    : "Head preview: left controller is outside view";
+            }
+            else
+            {
+                Status = "Physical wrist menu active";
+            }
+
+            Vector3 facing = head.position - position;
             Quaternion orientation = facing.sqrMagnitude > 0.0001f
-                ? Quaternion.LookRotation(facing.normalized, Vector3.up)
-                : anchor.rotation;
+                ? Quaternion.LookRotation(facing.normalized, head.up)
+                : head.rotation;
             if (firstPosition)
             {
                 root.transform.position = position;
@@ -100,70 +144,137 @@ namespace Volas
             }
             else
             {
-                float t = 1f - Mathf.Exp(-21f * Time.unscaledDeltaTime);
+                float t = 1f - Mathf.Exp(-24f * Time.unscaledDeltaTime);
                 root.transform.position = Vector3.Lerp(root.transform.position, position, t);
                 root.transform.rotation = Quaternion.Slerp(root.transform.rotation, orientation, t);
             }
+
             root.transform.localScale = Vector3.one *
                 plugin.Settings.VrScale.Value * (plugin.Compact ? 0.82f : 1f);
             if (!wasOpen)
             {
                 wasOpen = true;
                 displayedRevision = -1;
+                plugin.Log.LogInfo("Volas physical menu rendered: " + Status);
             }
-            if (displayedRevision != plugin.Features.Revision)
-                Rebuild();
+            if (displayedRevision != plugin.Features.Revision) Rebuild();
 
-            Transform hand = plugin.Game.RightHand;
-            if (hand == null)
+            Transform rightHand = plugin.Game.RightHand;
+            InputDevice controller = GetRightController();
+            bool trigger = ReadTrigger(controller);
+            int touched = -1;
+            bool touching = false;
+            int pointed = -1;
+            Vector3 hit = Vector3.zero;
+            bool rayHit = false;
+
+            if (rightHand != null)
             {
-                SetHover(-1);
-                HidePointer();
-                return;
+                Vector3 tip = root.transform.InverseTransformPoint(
+                    rightHand.TransformPoint(new Vector3(0f, -0.018f, 0.047f)));
+                bool hoverDepth = tip.z >= .005f && tip.z <= .16f;
+                touched = FindButton(tip.x, tip.y, hoverDepth);
+                // Only press when physically contacting the raised front,
+                // not merely hovering a few centimeters above it.
+                touching = touched >= 0 && tip.z <= .069f;
+                if (touched == -1 || tip.z > .105f) touchArmed = true;
+                rayHit = FindPointer(rightHand, out pointed, out hit);
+            }
+            else
+            {
+                touchArmed = false;
             }
 
-            InputDevice controller = InputDevices.GetDeviceAtXRNode(XRNode.RightHand);
-            bool trigger = false;
-            if (controller.isValid)
+            // In desktop preview, an ordinary mouse can click physical
+            // menu buttons. This also works when headset controllers fail.
+            int mouseTarget = -1;
+            Vector3 mouseHit;
+            bool mouseRay = FindMousePointer(camera, out mouseTarget, out mouseHit);
+            bool mouseClick = false;
+            try { mouseClick = mouseTarget >= 0 && Input.GetMouseButtonDown(0); }
+            catch (Exception) { }
+
+            if ((!rayHit || pointed == -1) && mouseRay)
             {
-                if (!controller.TryGetFeatureValue(CommonUsages.triggerButton, out trigger))
+                rayHit = true;
+                pointed = mouseTarget;
+                hit = mouseHit;
+            }
+            if (rightHand != null && rayHit)
+                UpdatePointer(rightHand, true, hit, controller);
+            else if (mouseRay)
+            {
+                if (pointerDot != null)
                 {
-                    float value;
-                    if (controller.TryGetFeatureValue(CommonUsages.trigger, out value))
-                        trigger = value >= 0.65f;
+                    pointerDot.SetActive(true);
+                    pointerDot.transform.position = mouseHit +
+                        root.transform.forward * .013f;
                 }
+                if (pointerBeam != null) pointerBeam.gameObject.SetActive(false);
             }
+            else
+                HidePointer();
 
-            Vector3 finger = root.transform.InverseTransformPoint(
-                hand.TransformPoint(new Vector3(0f, -0.018f, 0.047f)));
-            bool inTouchDepth = Mathf.Abs(finger.z - TouchPlane) <= 0.048f;
-            int touched = FindButton(finger.x, finger.y, inTouchDepth);
-            if (touched < 0 || !inTouchDepth)
-                touchArmed = true;
+            int selection = touched >= 0 ? touched : pointed;
+            if (mouseClick) selection = mouseTarget;
+            SetHover(selection);
 
-            int pointed;
-            Vector3 worldHit;
-            bool rayHit = FindPointer(hand, out pointed, out worldHit);
-            UpdatePointer(hand, rayHit, worldHit, controller);
-
-            int target = touched >= 0 ? touched : pointed;
-            SetHover(target);
-            bool touchPress = touched >= 0 && touchArmed;
-            bool rayPress = pointed >= 0 && trigger && !previousTrigger;
+            bool touchPress = touching && touchArmed;
+            bool triggerPress = pointed >= 0 && trigger && !previousTrigger;
             previousTrigger = trigger;
-
-            if ((touchPress || rayPress) && Time.unscaledTime >= nextPressAt)
+            if ((touchPress || triggerPress || mouseClick) &&
+                Time.unscaledTime >= nextPressAt)
             {
-                int index = touchPress ? touched : pointed;
+                int index = mouseClick ? mouseTarget :
+                    touchPress ? touched : pointed;
                 if (index >= 0 && index < buttons.Count)
                 {
                     touchArmed = false;
-                    nextPressAt = Time.unscaledTime + 0.21f;
+                    nextPressAt = Time.unscaledTime + .23f;
                     Action action = buttons[index].Action;
                     Haptic(controller);
                     if (action != null) action();
+                    Status = "Button selected";
                 }
             }
+        }
+
+        private InputDevice GetRightController()
+        {
+            InputDevice device = InputDevices.GetDeviceAtXRNode(XRNode.RightHand);
+            if (device.isValid) return device;
+            rightControllerCandidates.Clear();
+            InputDevices.GetDevicesWithCharacteristics(
+                InputDeviceCharacteristics.Right | InputDeviceCharacteristics.Controller,
+                rightControllerCandidates);
+            for (int i = 0; i < rightControllerCandidates.Count; i++)
+                if (rightControllerCandidates[i].isValid)
+                    return rightControllerCandidates[i];
+            return device;
+        }
+
+        private static bool ReadTrigger(InputDevice device)
+        {
+            if (!device.isValid) return false;
+            bool pressed;
+            if (device.TryGetFeatureValue(CommonUsages.triggerButton, out pressed))
+                return pressed;
+            float analog;
+            return device.TryGetFeatureValue(CommonUsages.trigger, out analog) &&
+                analog >= .62f;
+        }
+
+        private bool FindMousePointer(Camera camera, out int index, out Vector3 point)
+        {
+            index = -1;
+            point = Vector3.zero;
+            if (camera == null) return false;
+            try
+            {
+                return IntersectMenu(camera.ScreenPointToRay(Input.mousePosition),
+                    4.0f, out index, out point);
+            }
+            catch (Exception) { return false; }
         }
 
         private bool CreateMenu()
@@ -289,27 +400,46 @@ namespace Volas
         {
             index = -1;
             point = Vector3.zero;
-            // Both common controller-axis orientations work across VR rigs.
-            Vector3[] directions = { hand.forward, -hand.up };
-            float bestDistance = float.MaxValue;
-            Plane plane = new Plane(root.transform.forward,
-                root.transform.position + root.transform.forward * ButtonPlane);
-            foreach (Vector3 direction in directions)
+            // GTAG rigs commonly aim along either -up or forward.
+            Vector3[] directions = { -hand.up, hand.forward };
+            float closest = float.MaxValue;
+            bool intersected = false;
+            for (int i = 0; i < directions.Length; i++)
             {
-                Ray ray = new Ray(hand.position, direction);
-                float distance;
-                if (!plane.Raycast(ray, out distance) ||
-                    distance <= 0.04f || distance >= 0.85f ||
-                    distance >= bestDistance) continue;
-                Vector3 hit = ray.GetPoint(distance);
-                Vector3 local = root.transform.InverseTransformPoint(hit);
-                int candidate = FindButton(local.x, local.y, true);
-                if (candidate == -1) continue;
-                bestDistance = distance;
-                index = candidate;
+                int candidate;
+                Vector3 hit;
+                if (!IntersectMenu(new Ray(hand.position, directions[i]), .95f,
+                    out candidate, out hit)) continue;
+                float distance = Vector3.Distance(hand.position, hit);
+                if (distance >= closest) continue;
+                closest = distance;
                 point = hit;
+                index = candidate;
+                intersected = true;
+                // Prefer a ray hitting an actual button over empty panel space.
+                if (candidate >= 0) break;
             }
-            return index >= 0;
+            return intersected;
+        }
+
+        private bool IntersectMenu(Ray ray, float maxDistance, out int index,
+            out Vector3 point)
+        {
+            index = -1;
+            point = Vector3.zero;
+            Plane panelPlane = new Plane(root.transform.forward,
+                root.transform.position + root.transform.forward *
+                (ButtonPlane * root.transform.localScale.z));
+            float distance;
+            if (!panelPlane.Raycast(ray, out distance) ||
+                distance < 0f || distance > maxDistance)
+                return false;
+            point = ray.GetPoint(distance);
+            Vector3 local = root.transform.InverseTransformPoint(point);
+            if (Mathf.Abs(local.x) > .242f || Mathf.Abs(local.y) > .384f)
+                return false;
+            index = FindButton(local.x, local.y, true);
+            return true;
         }
 
         private int FindButton(float x, float y, bool eligible)
