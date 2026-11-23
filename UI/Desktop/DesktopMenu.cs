@@ -192,6 +192,7 @@ namespace Volas
             Image fieldImage = MakeImage(window, "Search background",
                 new Color(.070f, .062f, .115f, .73f), softRounded, true);
             Place(fieldImage.rectTransform, 545f, 7f, 140f, 24f);
+            fieldImage.raycastTarget = true;
             searchBox = fieldImage.gameObject.AddComponent<InputField>();
             searchBox.transition = Selectable.Transition.None;
             Text fieldText = MakeText(fieldImage.rectTransform, "Input text",
