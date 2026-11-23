@@ -60,6 +60,35 @@ namespace Volas
                 "hand_axes", "Visuals", "Hand axis guide", "Show orientation axes on the right controller.",
                 p => p.ExtraVisuals.HandAxes = true,
                 p => p.ExtraVisuals.HandAxes = false));
+            registry.Add(new Feature(
+                "wrist_rings", "Visuals", "Wrist rings", "Add glowing rings to both controllers.",
+                p => p.Decorations.WristRings = true,
+                p => p.Decorations.WristRings = false));
+
+            registry.Add(new Feature(
+                "pulse_rings", "Visuals", "Pulsing wrist rings", "Animate glowing rings at both wrists.",
+                p => p.Decorations.PulsingWristRings = true,
+                p => p.Decorations.PulsingWristRings = false));
+
+            registry.Add(new Feature(
+                "head_crown", "Visuals", "Neon crown", "Orbit local glowing jewels above your head.",
+                p => p.Decorations.HeadCrown = true,
+                p => p.Decorations.HeadCrown = false));
+
+            registry.Add(new Feature(
+                "floor_ring", "Visuals", "Floor circle", "Show a local glowing circle beneath your avatar.",
+                p => p.Decorations.FloorRing = true,
+                p => p.Decorations.FloorRing = false));
+
+            registry.Add(new Feature(
+                "floor_rainbow", "Visuals", "Rainbow floor circle", "Cycle the color of your local floor circle.",
+                p => p.Decorations.RainbowFloor = true,
+                p => p.Decorations.RainbowFloor = false));
+
+            registry.Add(new Feature(
+                "glove_cubes", "Visuals", "Controller cubes", "Add rotating neon cubes to both controllers.",
+                p => p.Decorations.GloveCubes = true,
+                p => p.Decorations.GloveCubes = false));
         }
     }
 }

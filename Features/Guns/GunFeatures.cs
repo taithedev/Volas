@@ -75,6 +75,35 @@ namespace Volas
                 p => { p.Movement.RequireMovementPlayer(); p.Guns.Dash = true; },
                 p => p.Guns.Dash = false,
                 needsModdedRoom: true));
+            registry.Add(new Feature(
+                "gun_grid", "Gun Mods", "Surface grid", "Draw a glowing grid on a local surface.",
+                p => p.CreativeGun.Grid = true,
+                p => p.CreativeGun.Grid = false));
+
+            registry.Add(new Feature(
+                "gun_spiral", "Gun Mods", "Spiral stamp", "Draw a luminous spiral decal.",
+                p => p.CreativeGun.Spiral = true,
+                p => p.CreativeGun.Spiral = false));
+
+            registry.Add(new Feature(
+                "gun_arrow", "Gun Mods", "Arrow marker", "Mark a surface with a glowing arrow.",
+                p => p.CreativeGun.Arrow = true,
+                p => p.CreativeGun.Arrow = false));
+
+            registry.Add(new Feature(
+                "gun_sign", "Gun Mods", "Volas sign", "Place a local VOLAS sign on the surface.",
+                p => p.CreativeGun.Sign = true,
+                p => p.CreativeGun.Sign = false));
+
+            registry.Add(new Feature(
+                "gun_sparkles", "Gun Mods", "Sparkle tool", "Scatter colorful local particles at the aimed surface.",
+                p => p.CreativeGun.Sparkles = true,
+                p => p.CreativeGun.Sparkles = false));
+
+            registry.Add(new Feature(
+                "gun_checker", "Gun Mods", "Checkerboard stamp", "Place a local neon checkerboard decal.",
+                p => p.CreativeGun.Checkerboard = true,
+                p => p.CreativeGun.Checkerboard = false));
         }
     }
 }

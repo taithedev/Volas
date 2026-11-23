@@ -23,6 +23,8 @@ namespace Volas
         internal readonly ConfigEntry<bool> GunGlow;
         internal readonly ConfigEntry<bool> GunPulse;
         internal readonly ConfigEntry<float> GunAnimationSpeed;
+        internal readonly ConfigEntry<float> GunMarkScale;
+        internal readonly ConfigEntry<float> GunMarkLifetime;
         internal readonly ConfigEntry<string> FavoriteIds;
         internal readonly ConfigEntry<float> WindowX;
         internal readonly ConfigEntry<float> WindowY;
@@ -71,6 +73,12 @@ namespace Volas
             GunAnimationSpeed = config.Bind("GunLib", "Animation speed", 1f,
                 new ConfigDescription("Multiplier for pointer animation speed.",
                     new AcceptableValueRange<float>(0.15f, 4f)));
+            GunMarkScale = config.Bind("GunLib", "Decorative stamp scale", 1f,
+                new ConfigDescription("Size multiplier for geometric pointer stamps.",
+                    new AcceptableValueRange<float>(0.5f, 2.5f)));
+            GunMarkLifetime = config.Bind("GunLib", "Decorative stamp lifetime", 30f,
+                new ConfigDescription("How long decorative stamps remain, in seconds.",
+                    new AcceptableValueRange<float>(3f, 120f)));
             FavoriteIds = config.Bind("Favorites", "Feature IDs", "",
                 "Comma-separated favorite feature IDs. Manage using the desktop star controls.");
             WindowX = config.Bind("Desktop", "Window X", 55f, "Horizontal desktop window position.");

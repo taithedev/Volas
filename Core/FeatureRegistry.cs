@@ -192,6 +192,12 @@ namespace Volas
                 Disable(f);
             if (plugin.Guns != null)
                 plugin.Guns.Reset();
+            if (plugin.CreativeGun != null)
+                plugin.CreativeGun.Reset();
+            if (plugin.Decorations != null)
+                plugin.Decorations.Reset();
+            if (plugin.Gun != null)
+                plugin.Gun.Reset();
             if (plugin.ExtraVisuals != null)
                 plugin.ExtraVisuals.Reset();
         }

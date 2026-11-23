@@ -421,7 +421,7 @@ namespace Volas
             display = null;
             if (spotlightObject != null) UnityEngine.Object.Destroy(spotlightObject);
             spotlightObject = null;
-            plugin.Gun.Reset();
+            // The shared pointer is reset by FeatureRegistry only when disabling all features.
         }
 
         internal void Dispose()

@@ -6,7 +6,7 @@ using UnityEngine.XR;
 
 namespace Volas
 {
-    [BepInPlugin("com.volas.gtag", "Volas", "1.2.0")]
+    [BepInPlugin("com.volas.gtag", "Volas", "1.3.0")]
     public sealed class VolasPlugin : BaseUnityPlugin
     {
         internal static VolasPlugin Instance { get; private set; }
@@ -17,6 +17,8 @@ namespace Volas
         internal ExtraVisualEffects ExtraVisuals { get; private set; }
         internal GunLib Gun { get; private set; }
         internal GunEffects Guns { get; private set; }
+        internal CreativeGunEffects CreativeGun { get; private set; }
+        internal VisualDecorations Decorations { get; private set; }
         internal MovementEffects Movement { get; private set; }
         internal VrMenu Vr { get; private set; }
         internal VolasConfiguration Settings { get; private set; }
@@ -62,6 +64,8 @@ namespace Volas
             ExtraVisuals = new ExtraVisualEffects(this);
             Gun = new GunLib(this);
             Guns = new GunEffects(this);
+            CreativeGun = new CreativeGunEffects(this);
+            Decorations = new VisualDecorations(this);
             Movement = new MovementEffects(this);
             Features = new FeatureRegistry(this);
             FeatureCatalog.Register(this);
@@ -95,11 +99,13 @@ namespace Volas
             lastVrButton = vrPressed;
 
             Features.Tick();
-            Gun.Tick(Guns.AnyEnabled);
+            Gun.Tick(Guns.AnyEnabled || CreativeGun.AnyEnabled);
             Guns.Tick();
+            CreativeGun.Tick();
             Movement.Tick();
             Effects.Tick();
             ExtraVisuals.Tick();
+            Decorations.Tick();
             Vr.Tick();
         }
 
@@ -124,6 +130,8 @@ namespace Volas
             if (Features != null) Features.DisableAll();
             if (Movement != null) Movement.Reset();
             if (Guns != null) Guns.Dispose();
+            if (CreativeGun != null) CreativeGun.Dispose();
+            if (Decorations != null) Decorations.Dispose();
             if (Gun != null) Gun.Dispose();
             if (Effects != null) Effects.Dispose();
             if (ExtraVisuals != null) ExtraVisuals.Dispose();

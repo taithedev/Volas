@@ -84,7 +84,7 @@ namespace Volas
             GUI.DrawTexture(new Rect(0f, 0f, window.width, 5f), white);
             GUI.color = savedColor;
             GUI.Label(new Rect(20f, 13f, 225f, 33f), "VOLAS", titleStyle);
-            GUI.Label(new Rect(window.width - 192f, 21f, 170f, 25f), "GTAG / BepInEx 5 / v1.2", smallStyle);
+            GUI.Label(new Rect(window.width - 192f, 21f, 170f, 25f), "GTAG / BepInEx 5 / v1.3", smallStyle);
             GUI.Label(new Rect(22f, 52f, window.width - 43f, 22f), plugin.Game.RoomSummary(), smallStyle);
 
             GUILayout.BeginArea(new Rect(16f, 82f, window.width - 32f, window.height - 143f));
@@ -154,6 +154,12 @@ namespace Volas
                     GUILayout.Label("ANIMATION SPEED " + settings.GunAnimationSpeed.Value.ToString("0.0") + "x", smallStyle);
                     float anim = GUILayout.HorizontalSlider(settings.GunAnimationSpeed.Value, 0.15f, 4f);
                     if (Mathf.Abs(anim - settings.GunAnimationSpeed.Value) > 0.03f) settings.GunAnimationSpeed.Value = anim;
+                    GUILayout.Label("STAMP SIZE " + settings.GunMarkScale.Value.ToString("0.00") + "x", smallStyle);
+                    float markScale = GUILayout.HorizontalSlider(settings.GunMarkScale.Value, 0.5f, 2.5f);
+                    if (Mathf.Abs(markScale - settings.GunMarkScale.Value) > 0.025f) settings.GunMarkScale.Value = markScale;
+                    GUILayout.Label("STAMP LIFETIME " + settings.GunMarkLifetime.Value.ToString("0") + " s", smallStyle);
+                    float lifetime = GUILayout.HorizontalSlider(settings.GunMarkLifetime.Value, 3f, 120f);
+                    if (Mathf.Abs(lifetime - settings.GunMarkLifetime.Value) > 1f) settings.GunMarkLifetime.Value = lifetime;
                 }
                 if (categories[selectedCategory] == "Settings")
                 {
