@@ -165,6 +165,10 @@ namespace Volas
             Transform rightHand = plugin.Game.RightHand;
             InputDevice controller = GetRightController();
             bool trigger = ReadTrigger(controller);
+            float gameTrigger;
+            if (plugin.Game.TryControllerFloat("rightControllerIndexFloat",
+                out gameTrigger) && gameTrigger >= .62f)
+                trigger = true;
             int touched = -1;
             bool touching = false;
             int pointed = -1;
