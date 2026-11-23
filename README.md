@@ -1,90 +1,43 @@
 # Volas
 
-**Volas 1.1 (source)** — modular C# PCVR Gorilla Tag mod menu for BepInEx 5 Mono, with a dark OLED-style desktop control panel and a 3D VR hand menu. Independent implementation, not a copy of Untitled.
+Volas is a C# PCVR Gorilla Tag mod menu built as a BepInEx 5 Mono plugin. The complete menu is ONE DLL containing Core, Features, Game, Settings, Desktop UI, and VR UI.
 
-> **Build status:** Source is committed, but it has **not** been compiled against your installed Gorilla Tag/BepInEx assemblies or verified in-game. The feature registry has 25 functional implementations, but game-version compatibility cannot be guaranteed.
+> The source has not been compiled here against your installed game assemblies or tested in-game. Building the project and verifying runtime compatibility are separate steps.
 
-## Repository structure
+## Build the entire menu (Windows)
 
-```text
-Volas/
-├── Core/
-│   ├── VolasPlugin.cs
-│   ├── FeatureRegistry.cs
-│   └── FeatureCatalog.cs
-├── Features/
-│   ├── Movement/
-│   │   ├── MovementEffects.cs
-│   │   └── MovementFeatures.cs
-│   ├── Visuals/
-│   │   ├── VisualEffects.cs
-│   │   └── VisualFeatures.cs
-│   ├── Telemetry/
-│   │   └── TelemetryFeatures.cs
-│   ├── Utilities/
-│   │   └── UtilityFeatures.cs
-│   └── Settings/
-│       └── SettingsFeatures.cs
-├── Game/
-│   └── GameBridge.cs
-├── UI/
-│   ├── Desktop/
-│   │   └── DesktopMenu.cs
-│   └── VR/
-│       └── VrMenu.cs
-├── Settings/
-│   └── VolasConfiguration.cs
-├── Build/
-│   └── Build-Volas.ps1
-├── Docs/
-│   ├── ARCHITECTURE.md
-│   └── TROUBLESHOOTING.md
-├── Volas.sln
-├── Volas.csproj
-└── build.ps1
-```
+1. Clone the repo and open Volas.sln in Visual Studio.
+2. Install the .NET SDK, Gorilla Tag PCVR, and BepInEx 5 Mono.
+3. Run build.bat in the repo root. This locates the Steam game directory, checks required Unity/BepInEx DLLs, and builds the WHOLE Volas.sln in Release mode.
+4. To also copy the built DLL into the game, open a terminal in the repo folder and run:
 
-## Build
+    .\build.bat -Install
 
-Requires Windows, Gorilla Tag PCVR, BepInEx 5 Mono, and Visual Studio with .NET Framework 4.7.2 developer targeting tools.
+5. The first successful script run creates Volas.Local.props (gitignored) so Visual Studio also knows the game directory. Select Release and use Build > Build Solution (Ctrl+Shift+B) to build again.
 
-1. Clone: `git clone https://github.com/taithedev/Volas.git`
-2. Install BepInEx 5 Mono into the PC Gorilla Tag game directory.
-3. Open `Volas.sln`, select **Release**, and use **Build Solution**.
-4. For one-command build and install on a default Steam setup, run:
+If the automatic Steam scan misses the game, give the full installed game folder:
 
-```powershell
-.\build.ps1 -Install
-```
+    .\build.bat -GamePath "D:\SteamLibrary\steamapps\common\Gorilla Tag" -Install
 
-For a custom Steam library:
+You can alternatively set the VOLAS_GAME_DIR environment variable. The build detects netstandard2.1 vs net472 from the installed Unity runtime; override with -Framework net472 or -Framework netstandard2.1 if needed.
 
-```powershell
-.\build.ps1 -GamePath "D:\SteamLibrary\steamapps\common\Gorilla Tag" -Install
-```
+Output: bin/Release/<framework>/Volas.dll. With -Install, the DLL is copied to the game's BepInEx/plugins directory. If using net472, the .NET Framework 4.7.2 targeting pack may also be required.
 
-Without `-Install`, the compiled output is `bin/Release/net472/Volas.dll`. To install manually copy it into `Gorilla Tag/BepInEx/plugins/Volas.dll`. If Unity or BepInEx library references cannot be found, set the game path explicitly.
+## Controls
 
-## Controls and UI
+- F6: open/close desktop panel.
+- Left-controller Y: open/close VR hand menu.
+- End: disable all active features.
 
-- **F6** toggles the resizable, draggable desktop panel.
-- **Left Y** toggles the VR hand menu; touch buttons with your **right hand**.
-- **End** disables every active feature.
-- **Right B** applies hand flight while that feature is enabled in a compatible solo/MODDED room.
-- **Search** filters features in the desktop panel. Star buttons add/remove features from the **Favorites** tab; **All** displays every feature.
-- Appearance settings include an OLED background, adjustable accent hue, rainbow accent, VR menu scaling, compact VR layout, and remembered desktop window dimensions/position.
-- Shortcuts, favorites, layout and appearance are saved in the BepInEx config file `BepInEx/config/com.volas.gtag.cfg`.
+## Project structure
 
-## 25 implemented feature entries
+- Core: plugin, registry and feature catalog.
+- Features: Movement, Visuals, Telemetry, Utilities and Settings.
+- Game: game/runtime bridge.
+- UI: desktop and VR menus.
+- Settings: configuration.
+- Build: full-solution Windows build tool.
 
-| Area | Features |
-| --- | --- |
-| Movement (4) | Speed boost, high jump, float gravity, hand flight |
-| Visuals (7) | Hand orbs, rainbow hands, trails, lights, pointer beam, head halo, path markers |
-| Telemetry (5) | FPS HUD, clock HUD, XYZ HUD, heading HUD, desktop crosshair |
-| Utilities (5) | Mute game audio, 90 FPS target, disable VSync, copy coordinates, log room status |
-| Settings (4) | Compact menu, rainbow theme, toggle desktop panel, disable all features |
+The repository currently registers 25 features. Some movement effects are limited to solo/recognized MODDED rooms; features and game-version compatibility still require actual in-game testing.
 
-Movement adjustments are local only, disabled by default, and restricted by the code to solo or rooms explicitly identified as MODDED by Photon properties. The menu does not implement anti-ban, mass tagging, report bypass, or player disruption.
-
-Read [architecture](Docs/ARCHITECTURE.md) and [troubleshooting](Docs/TROUBLESHOOTING.md) for extending the project and diagnosing version-specific issues.
+More information: Docs/TROUBLESHOOTING.md and Docs/ARCHITECTURE.md.

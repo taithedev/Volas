@@ -1,21 +1,23 @@
-# Build and runtime troubleshooting
+# Troubleshooting Volas
 
-## Missing assembly references
+## Building the entire menu
 
-Install Gorilla Tag PCVR and BepInEx 5 Mono, then use `build.ps1 -GamePath "FULL_PATH_TO_GORILLA_TAG" -Install`. The project assumes `Gorilla Tag_Data/Managed` and `BepInEx/core/BepInEx.dll` exist in the selected directory.
+Open Volas.sln and select Release, then Build > Build Solution (Ctrl+Shift+B). There is only one C# project, which explicitly includes all .cs files under Core, Features, Game, Settings, and UI. The result is one Volas.dll.
 
-## Build errors in Visual Studio
+First run build.bat at least once to auto-detect the Steam installation and save the path for Visual Studio in Volas.Local.props. Use build.bat -Install to build and copy the plugin into BepInEx/plugins.
 
-Select **Release** configuration and confirm the .NET Framework 4.7.2 targeting pack is available. Build Solution writes `Volas.dll` to `bin/Release/net472/`; a build does not automatically install it unless `-p:InstallToGame=true` or the PowerShell installer was used. Check the first error in the Output / Error List; resolve missing assemblies before investigating later compiler errors.
+## Cannot find Gorilla Tag
 
-## No menu
+Use build.bat -GamePath "FULL_PATH_TO_GORILLA_TAG". The path must be the directory containing Gorilla Tag_Data, not the Managed directory. The script also scans Steam libraryfolders.vdf and Steam/SteamLibrary folders on available drives.
 
-Ensure `Volas.dll` is in `Gorilla Tag/BepInEx/plugins`. Launch PCVR and press **F6** for desktop UI or left-controller **Y** for VR UI. Inspect `BepInEx/LogOutput.log` for `Volas loaded` or an exception.
+## BepInEx 5 / Unity assemblies missing
 
-## Feature not activating
+The build uses the DLLs from your own installed game. It checks BepInEx/core/BepInEx.dll and required UnityEngine module DLLs in Gorilla Tag_Data/Managed before invoking the compiler. Install the correct BepInEx 5 Mono loader and verify the game path.
 
-Movement mods require a recognized MODDED room or solo state and the expected Gorilla Tag player/runtime fields. If the game updates a player field, `GameBridge.cs` and `MovementEffects.cs` may need updating. No mod can be guaranteed compatible before in-game tests.
+## Compiler errors
 
-## Layout or shortcuts
+For Unity/BepInEx reference errors, read the FIRST compiler error in the build output. Newer Unity Mono installs with netstandard.dll default to netstandard2.1; other installs default to net472. Try -Framework net472 or -Framework netstandard2.1 only if needed for the specific game's assemblies. The net472 target may require the .NET Framework 4.7.2 targeting pack.
 
-Edit `BepInEx/config/com.volas.gtag.cfg` after quitting the game to change bindings, menu scale, accent, or reset saved window coordinates. The desktop menu also provides accent and scale sliders. Press **End** to switch all features off.
+## DLL built but menu not showing
+
+Use build.bat -Install or copy bin/Release/<framework>/Volas.dll into Gorilla Tag/BepInEx/plugins. Start Gorilla Tag on PC, press F6 for desktop menu or Y on left controller for VR menu. Check BepInEx/LogOutput.log for a Volas load error. A successful compiler run does not prove runtime compatibility.
