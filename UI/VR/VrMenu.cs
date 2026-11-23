@@ -20,9 +20,10 @@ namespace Volas
         private Material charcoal;
         private Material row;
         private Material hover;
+        private Material lightHover;
         private Material white;
         private Material dim;
-        private int categoryIndex = 0;
+        private int categoryIndex = -1; // -1: physical category launcher, like the reference menu
         private int page = 0;
         private int currentRevision = -1;
         private int hoveredButton = -1;
@@ -107,7 +108,9 @@ namespace Volas
                 for (int i = 0; i < buttons.Count; i++)
                 {
                     if (buttons[i].Surface != null)
-                        buttons[i].Surface.sharedMaterial = i == target ? hover : buttons[i].Resting;
+                        buttons[i].Surface.sharedMaterial = i == target
+                            ? (buttons[i].Resting == white ? lightHover : hover)
+                            : buttons[i].Resting;
                 }
             }
 
@@ -170,6 +173,7 @@ namespace Volas
             charcoal = MakeMaterial(shader, new Color(0.053f, 0.057f, 0.068f));
             row = MakeMaterial(shader, new Color(0.105f, 0.11f, 0.13f));
             hover = MakeMaterial(shader, new Color(0.30f, 0.31f, 0.34f));
+            lightHover = MakeMaterial(shader, new Color(0.88f, 0.88f, 0.90f));
             white = MakeMaterial(shader, new Color(0.97f, 0.97f, 1f));
             dim = MakeMaterial(shader, new Color(0.56f, 0.57f, 0.60f));
             return true;
@@ -219,36 +223,53 @@ namespace Volas
 
             var categories = plugin.Features.Categories;
             if (categories.Count == 0) return;
-            categoryIndex = Mathf.Clamp(categoryIndex, 0, categories.Count - 1);
-            string category = categories[categoryIndex];
-            var features = plugin.Features.InCategory(category);
-            int totalPages = Mathf.Max(1, Mathf.CeilToInt(features.Count / (float)PageSize));
+            if (categoryIndex < -1 || categoryIndex >= categories.Count) categoryIndex = -1;
+            bool home = categoryIndex == -1;
+            string category = home ? "Categories" : categories[categoryIndex];
+            var features = home ? null : plugin.Features.InCategory(category);
+            int itemCount = home ? categories.Count : features.Count;
+            int totalPages = Mathf.Max(1, Mathf.CeilToInt(itemCount / (float)PageSize));
             page = Mathf.Clamp(page, 0, totalPages - 1);
 
             Label("VOLAS", -0.213f, 0.343f, 0.018f, white.color);
-            Label("v1.4", 0.113f, 0.343f, 0.011f, dim.color);
+            Label("v1.4", 0.028f, 0.343f, 0.010f, dim.color);
+            AddButton("HOME", 0.139f, 0.345f, 0.092f, 0.046f,
+                row, GoHome, 6);
             AddButton("X", 0.207f, 0.345f, 0.04f, 0.046f,
                 white, () => plugin.VrOpen = false, 1);
 
             AddButton("<", -0.189f, 0.267f, 0.069f, 0.053f,
-                row, () => SwitchCategory(-1), 2);
+                row, home ? (Action)(() => SwitchPage(-1, totalPages))
+                    : () => SwitchCategory(-1), 2);
             AddButton(">", 0.189f, 0.267f, 0.069f, 0.053f,
-                row, () => SwitchCategory(1), 3);
+                row, home ? (Action)(() => SwitchPage(1, totalPages))
+                    : () => SwitchCategory(1), 3);
             Label(Clip(category.ToUpperInvariant(), 15), -0.118f, 0.267f, 0.013f, white.color);
 
-            if (features.Count == 0)
+            if (itemCount == 0)
                 Label("NO MODS HERE", -0.205f, 0.10f, 0.013f, dim.color);
 
             int offset = page * PageSize;
-            for (int i = 0; i < PageSize && offset + i < features.Count; i++)
+            for (int i = 0; i < PageSize && offset + i < itemCount; i++)
             {
-                Feature feature = features[offset + i];
+                int itemIndex = offset + i;
                 float y = 0.197f - i * 0.065f;
-                string name = Clip(feature.Label.ToUpperInvariant(), 19);
-                string suffix = feature.ActionOnly ? " >" : feature.Enabled ? " ON" : "";
-                AddButton(name + suffix, 0f, y, 0.427f, 0.057f,
-                    feature.Enabled ? white : row,
-                    () => plugin.Features.Activate(feature), 100 + offset + i);
+                if (home)
+                {
+                    string entry = categories[itemIndex];
+                    AddButton(Clip(entry.ToUpperInvariant(), 22) + "   >", 0f, y,
+                        0.427f, 0.057f, row, () => OpenCategory(itemIndex),
+                        100 + itemIndex);
+                }
+                else
+                {
+                    Feature feature = features[itemIndex];
+                    string name = Clip(feature.Label.ToUpperInvariant(), 19);
+                    string suffix = feature.ActionOnly ? " >" : feature.Enabled ? " ON" : "";
+                    AddButton(name + suffix, 0f, y, 0.427f, 0.057f,
+                        feature.Enabled ? white : row,
+                        () => plugin.Features.Activate(feature), 100 + itemIndex);
+                }
             }
 
             AddButton("PREV", -0.128f, -0.307f, 0.178f, 0.054f,
@@ -259,6 +280,20 @@ namespace Volas
             Label("TOUCH WITH RIGHT HAND", -0.080f, -0.359f, 0.009f, dim.color);
 
             currentRevision = plugin.Features.Revision;
+        }
+
+        private void GoHome()
+        {
+            categoryIndex = -1;
+            page = 0;
+            currentRevision = -1;
+        }
+
+        private void OpenCategory(int index)
+        {
+            categoryIndex = index;
+            page = 0;
+            currentRevision = -1;
         }
 
         private void SwitchCategory(int amount)
@@ -321,6 +356,7 @@ namespace Volas
             DestroyMaterial(ref charcoal);
             DestroyMaterial(ref row);
             DestroyMaterial(ref hover);
+            DestroyMaterial(ref lightHover);
             DestroyMaterial(ref white);
             DestroyMaterial(ref dim);
         }
