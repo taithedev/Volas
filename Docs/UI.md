@@ -12,7 +12,7 @@ The interface uses programmatically constructed **Unity uGUI**: Canvas, CanvasSc
 
 ## Physical VR menu
 
-The in-world menu lives in `UI/VR/VrMenu.cs`. It constructs a **raised 3D OLED tablet** with a charcoal body, violet edge trim, clickable physical button meshes, and world-space TextMesh labels. No IMGUI or Canvas is used for the physical wrist panel. Its content rebuilds whenever the registry changes and stays attached to the left tracked controller with smoothed tracking and headset-facing rotation.
+The in-world menu lives in `UI/VR/VrMenu.cs`. It constructs a **rounded 3D OLED tablet** with a charcoal body, violet edge trim, clickable rounded physical button meshes, and world-space TextMesh labels. No IMGUI or Canvas is used for the physical wrist panel. Its content rebuilds whenever the registry changes and stays attached to the left tracked controller with smoothed tracking and headset-facing rotation.
 
 - **Left Y:** open / close.
 - **Right hand:** move the controller tip onto a raised button to press it, or aim at a button and press the right trigger. The pointer supports both common controller aim axes and shows a local beam and selection dot.
@@ -22,6 +22,8 @@ The in-world menu lives in `UI/VR/VrMenu.cs`. It constructs a **raised 3D OLED t
 - **< / >:** change pages. Each page displays up to 6 features with ON/OFF feedback.
 - **RESET:** disable all active Volas features.
 - Compatible controllers receive a short haptic pulse on selection; input is debounced to avoid rapid repeats.
+
+F7 can open the physical menu from the PC keyboard, and F6 > Settings > OPEN VR MENU / TEST also opens it. A head-positioned preview is used when tracked left-hand position is unavailable. Native Gorilla Tag ControllerInputPoller input supports SteamVR as a fallback for left Y and right trigger, with Unity XR fallback. PC mouse clicks work for testing when visible in the camera view.
 
 The menu uses only registered Volas features and does not synthesize fake mod entries. Configuration in BepInEx stores the menu's scale and wrist offsets, but the current desktop uGUI settings page exposes only compact sizing; other offset values can be adjusted in the BepInEx configuration file.
 
