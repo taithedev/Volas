@@ -340,6 +340,8 @@ namespace Volas
                 DrawHome();
             else if (string.IsNullOrEmpty(currentQuery) && currentPage == "Settings")
                 DrawSettingsPage();
+            else if (string.IsNullOrEmpty(currentQuery) && currentPage == "Gun Studio")
+                DrawGunStudio();
             else
                 DrawFeaturePage();
         }
@@ -430,6 +432,9 @@ namespace Volas
                 14f, 184f, 207f, 33f, panelColor,
                 () => { plugin.Compact = !plugin.Compact; RedrawPage(); },
                 white, 10);
+            MakeButton(controls, "Gun styles", "OPEN GUN STUDIO",
+                14f, 245f, 207f, 37f, purple,
+                () => Navigate("Gun Studio"), white, 11, true);
 
             MakeText(safety, "Local-only features by default.",
                 14f, 48f, 203f, 42f, 11, muted);
@@ -440,7 +445,81 @@ namespace Volas
                 () => { plugin.Features.DisableAll(); RedrawPage(); }, white, 11, true);
         }
 
-        private void MakeSlider(Transform parent, string title,
+        private void DrawGunStudio()
+        {
+            MakeText(pageRoot, "Gun Studio", 4f, 0f, 420f, 27f, 14, white, true);
+            RectTransform[] panels = new RectTransform[3];
+            string[] headings = { "Pointer", "Reticle", "Controls" };
+            for (int i = 0; i < 3; i++)
+            {
+                Image bg = MakeImage(pageRoot, headings[i], panelColor, softRounded, true);
+                Place(bg.rectTransform, i * 247f, 34f, 236f, 337f);
+                panels[i] = bg.rectTransform;
+                MakeText(panels[i], headings[i], 14f, 9f, 207f, 24f, 12, white, true);
+            }
+
+            var cfg = plugin.Settings;
+            MakeText(panels[0], "Maximum pointer range", 14f, 42f, 205f, 20f,
+                11, muted);
+            MakeSlider(panels[0], "Range", 14f, 70f, 206f,
+                10f, 250f, cfg.GunDistance.Value, v => cfg.GunDistance.Value = v);
+            MakeText(panels[0], "Beam width", 14f, 110f, 205f, 20f, 11, muted);
+            MakeSlider(panels[0], "Beam width", 14f, 137f, 206f,
+                .002f, .06f, cfg.GunBeamWidth.Value,
+                v => cfg.GunBeamWidth.Value = v);
+            MakeButton(panels[0], "Beam style", "BEAM " +
+                new [] { "STRAIGHT", "WAVE", "SPIRAL" }[cfg.GunBeamStyle.Value],
+                14f, 198f, 208f, 36f, panelColor,
+                () =>
+                {
+                    cfg.GunBeamStyle.Value = (cfg.GunBeamStyle.Value + 1) % 3;
+                    RedrawPage();
+                }, white, 11);
+
+            MakeText(panels[1], "Reticle size", 14f, 42f, 205f, 20f, 11, muted);
+            MakeSlider(panels[1], "Reticle size", 14f, 69f, 207f,
+                .025f, .20f, cfg.GunReticleSize.Value,
+                v => cfg.GunReticleSize.Value = v);
+            MakeButton(panels[1], "Reticle style", "RETICLE " +
+                new [] { "ORB", "BOX", "RING", "GEM" }[cfg.GunReticleStyle.Value],
+                14f, 124f, 208f, 36f, panelColor,
+                () =>
+                {
+                    cfg.GunReticleStyle.Value = (cfg.GunReticleStyle.Value + 1) % 4;
+                    RedrawPage();
+                }, white, 11);
+            MakeButton(panels[1], "Rainbow pointer",
+                cfg.GunRainbow.Value ? "RAINBOW GUN ON" : "RAINBOW GUN OFF",
+                14f, 178f, 208f, 36f,
+                cfg.GunRainbow.Value ? purple : panelColor,
+                () => { cfg.GunRainbow.Value = !cfg.GunRainbow.Value; RedrawPage(); },
+                white, 11);
+            MakeButton(panels[1], "Glow",
+                cfg.GunGlow.Value ? "GLOW ON" : "GLOW OFF",
+                14f, 232f, 208f, 32f, panelColor,
+                () => { cfg.GunGlow.Value = !cfg.GunGlow.Value; RedrawPage(); },
+                white, 10);
+
+            MakeButton(panels[2], "Left hand",
+                cfg.GunLeftHand.Value ? "LEFT HAND" : "RIGHT HAND",
+                14f, 53f, 208f, 36f, panelColor,
+                () => { cfg.GunLeftHand.Value = !cfg.GunLeftHand.Value; RedrawPage(); },
+                white, 11);
+            MakeButton(panels[2], "Forward aim",
+                cfg.GunUseForward.Value ? "FORWARD AIM" : "DOWNHAND AIM",
+                14f, 109f, 208f, 36f, panelColor,
+                () => { cfg.GunUseForward.Value = !cfg.GunUseForward.Value; RedrawPage(); },
+                white, 11);
+            MakeButton(panels[2], "Pulse effect",
+                cfg.GunPulse.Value ? "PULSE ON" : "PULSE OFF",
+                14f, 165f, 208f, 36f, panelColor,
+                () => { cfg.GunPulse.Value = !cfg.GunPulse.Value; RedrawPage(); },
+                white, 11);
+            MakeText(panels[2], "Hold the selected hand grip to aim, then fire with the trigger.",
+                14f, 222f, 204f, 75f, 11, muted);
+        }
+
+                private void MakeSlider(Transform parent, string title,
             float x, float y, float width,
             float min, float max, float value, Action<float> onValue)
         {
