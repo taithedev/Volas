@@ -6,6 +6,9 @@
     <GorillaTagDir Condition="'$(GorillaTagDir)' == ''">C:\Program Files (x86)\Steam\steamapps\common\Gorilla Tag</GorillaTagDir>
     <ManagedDir>$(GorillaTagDir)\Gorilla Tag_Data\Managed</ManagedDir>
     <BepInExDir>$(GorillaTagDir)\BepInEx\core</BepInExDir>
+    <UnityEngineFacadePath Condition="'$(UnityEngineFacadePath)' == '' and Exists('$(ManagedDir)\UnityEngine.dll')">$(ManagedDir)\UnityEngine.dll</UnityEngineFacadePath>
+    <UnityEngineFacadePath Condition="'$(UnityEngineFacadePath)' == '' and Exists('$(BepInExDir)\UnityEngine.dll')">$(BepInExDir)\UnityEngine.dll</UnityEngineFacadePath>
+    <UnityEngineFacadePath Condition="'$(UnityEngineFacadePath)' == '' and Exists('$(GorillaTagDir)\BepInEx\plugins\UnityEngine.dll')">$(GorillaTagDir)\BepInEx\plugins\UnityEngine.dll</UnityEngineFacadePath>
     <!-- BepInEx 5 Mono normally works with .NET Framework.  Do NOT infer
          netstandard2.1 only because Unity ships a netstandard facade. -->
     <TargetFramework>net472</TargetFramework>
@@ -41,11 +44,13 @@
       <Private>false</Private>
       <SpecificVersion>false</SpecificVersion>
     </Reference>
-    <Reference Include="UnityEngine" Condition="Exists('$(ManagedDir)\UnityEngine.dll')">
-      <HintPath>$(ManagedDir)\UnityEngine.dll</HintPath><Private>false</Private>
-    </Reference>
-    <Reference Include="UnityEngine" Condition="!Exists('$(ManagedDir)\UnityEngine.dll') and Exists('$(BepInExDir)\UnityEngine.dll')">
-      <HintPath>$(BepInExDir)\UnityEngine.dll</HintPath><Private>false</Private>
+    <!-- Resolve UnityEngine.dll explicitly. BepInEx builds that reference the
+         UnityEngine facade produce repeated CS0012 MonoBehaviour errors if it
+         is silently omitted by a conditional reference. -->
+    <Reference Include="UnityEngine" Condition="'$(UnityEngineFacadePath)' != ''">
+      <HintPath>$(UnityEngineFacadePath)</HintPath>
+      <Private>false</Private>
+      <SpecificVersion>false</SpecificVersion>
     </Reference>
     <Reference Include="UnityEngine.CoreModule">
       <HintPath>$(ManagedDir)\UnityEngine.CoreModule.dll</HintPath><Private>false</Private>
@@ -85,6 +90,9 @@
 
   <Target Name="ValidateVolasReferences" BeforeTargets="ResolveReferences">
     <Message Importance="high" Text="Volas compiling $(TargetFramework) against: $(ManagedDir)" />
+    <Message Importance="high" Text="UnityEngine.dll facade: $(UnityEngineFacadePath)" />
+    <Error Condition="'$(UnityEngineFacadePath)' != '' and !Exists('$(UnityEngineFacadePath)')"
+           Text="Volas: UnityEngineFacadePath points to a missing DLL: $(UnityEngineFacadePath)" />
     <Error Condition="!Exists('$(ManagedDir)\UnityEngine.CoreModule.dll')"
            Text="Volas: UnityEngine.CoreModule.dll missing at $(ManagedDir). Run build.bat with -GamePath or check Steam's installed game directory." />
     <Error Condition="!Exists('$(BepInExDir)\BepInEx.dll')"
