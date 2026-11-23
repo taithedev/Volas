@@ -16,6 +16,8 @@ namespace Volas
         private readonly Image windowBackground;
         private readonly Image innerBackground;
         private float lastOpacity = -1f;
+        private StandaloneInputModule addedInputModule;
+        private GameObject createdEventSystem;
         private readonly RectTransform canvasRect;
         private readonly RectTransform window;
         private readonly RectTransform pageRoot;
@@ -171,12 +173,18 @@ namespace Volas
             var events = UnityEngine.Object.FindObjectOfType<EventSystem>();
             if (events == null)
             {
-                var host = new GameObject("Volas UI EventSystem",
-                    typeof(EventSystem), typeof(StandaloneInputModule));
-                UnityEngine.Object.DontDestroyOnLoad(host);
+                createdEventSystem = new GameObject("Volas UI EventSystem",
+                    typeof(EventSystem));
+                UnityEngine.Object.DontDestroyOnLoad(createdEventSystem);
+                events = createdEventSystem.GetComponent<EventSystem>();
             }
-            else if (events.GetComponent<BaseInputModule>() == null)
-                events.gameObject.AddComponent<StandaloneInputModule>();
+            // VR EventSystems do not always have a mouse input module.
+            // Enable our added module only while the PC menu is visible.
+            if (events.GetComponent<StandaloneInputModule>() == null)
+            {
+                addedInputModule = events.gameObject.AddComponent<StandaloneInputModule>();
+                addedInputModule.enabled = false;
+            }
         }
 
         private void BuildSearch()
@@ -264,6 +272,7 @@ namespace Volas
                     savedLockMode = Cursor.lockState;
                     Cursor.lockState = CursorLockMode.None;
                     Cursor.visible = true;
+                    if (addedInputModule != null) addedInputModule.enabled = true;
                     root.SetActive(true);
                     window.gameObject.SetActive(true);
                     RedrawPage();
@@ -272,12 +281,18 @@ namespace Volas
                 {
                     // Only restore the cursor state we captured on opening.
                     window.gameObject.SetActive(false);
+                    if (addedInputModule != null) addedInputModule.enabled = false;
                     Cursor.lockState = savedLockMode;
                     Cursor.visible = savedCursorVisible;
                 }
             }
             if (open && plugin.Features.Revision != drawnRevision)
                 RedrawPage();
+            if (open)
+            {
+                Cursor.lockState = CursorLockMode.None;
+                Cursor.visible = true;
+            }
 
             if (Time.unscaledTime >= lastHUDUpdate + .24f)
             {
@@ -621,6 +636,10 @@ namespace Volas
                 Cursor.visible = savedCursorVisible;
             }
             if (root != null) UnityEngine.Object.Destroy(root);
+            if (createdEventSystem != null)
+                UnityEngine.Object.Destroy(createdEventSystem);
+            else if (addedInputModule != null)
+                UnityEngine.Object.Destroy(addedInputModule);
             if (rounded != null)
             {
                 var texture = rounded.texture;
