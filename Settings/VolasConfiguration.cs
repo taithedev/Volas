@@ -16,6 +16,13 @@ namespace Volas
         internal readonly ConfigEntry<float> GunBeamWidth;
         internal readonly ConfigEntry<float> GunReticleSize;
         internal readonly ConfigEntry<bool> GunUseForward;
+        internal readonly ConfigEntry<bool> GunLeftHand;
+        internal readonly ConfigEntry<int> GunBeamStyle;
+        internal readonly ConfigEntry<int> GunReticleStyle;
+        internal readonly ConfigEntry<bool> GunRainbow;
+        internal readonly ConfigEntry<bool> GunGlow;
+        internal readonly ConfigEntry<bool> GunPulse;
+        internal readonly ConfigEntry<float> GunAnimationSpeed;
         internal readonly ConfigEntry<string> FavoriteIds;
         internal readonly ConfigEntry<float> WindowX;
         internal readonly ConfigEntry<float> WindowY;
@@ -51,6 +58,19 @@ namespace Volas
                     new AcceptableValueRange<float>(0.025f, 0.20f)));
             GunUseForward = config.Bind("GunLib", "Aim along forward", false,
                 "If true, aim from right hand +forward. Otherwise aim along -up.");
+            GunLeftHand = config.Bind("GunLib", "Left-hand pointer", false, "Use the left controller for aiming instead of right.");
+            GunBeamStyle = config.Bind("GunLib", "Beam style", 0,
+                new ConfigDescription("0 Straight / 1 Wave / 2 Spiral",
+                    new AcceptableValueRange<int>(0, 2)));
+            GunReticleStyle = config.Bind("GunLib", "Reticle style", 0,
+                new ConfigDescription("0 Orb / 1 Block / 2 Ring / 3 Diamond",
+                    new AcceptableValueRange<int>(0, 3)));
+            GunRainbow = config.Bind("GunLib", "Rainbow pointer", false, "Cycle pointer color over time.");
+            GunGlow = config.Bind("GunLib", "Soft glow", true, "Draw a local translucent outline along the beam.");
+            GunPulse = config.Bind("GunLib", "Pulse animation", true, "Animate the pointer width and reticle size.");
+            GunAnimationSpeed = config.Bind("GunLib", "Animation speed", 1f,
+                new ConfigDescription("Multiplier for pointer animation speed.",
+                    new AcceptableValueRange<float>(0.15f, 4f)));
             FavoriteIds = config.Bind("Favorites", "Feature IDs", "",
                 "Comma-separated favorite feature IDs. Manage using the desktop star controls.");
             WindowX = config.Bind("Desktop", "Window X", 55f, "Horizontal desktop window position.");

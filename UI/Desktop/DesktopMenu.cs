@@ -124,6 +124,36 @@ namespace Volas
                     bool forward = plugin.Settings.GunUseForward.Value;
                     bool nextForward = GUILayout.Toggle(forward, "Aim from controller forward axis");
                     if (nextForward != forward) plugin.Settings.GunUseForward.Value = nextForward;
+                    bool left = plugin.Settings.GunLeftHand.Value;
+                    bool nextLeft = GUILayout.Toggle(left, "Left-hand pointer");
+                    if (nextLeft != left) plugin.Settings.GunLeftHand.Value = nextLeft;
+                    GUILayout.Label("BEAM STYLE", smallStyle);
+                    GUILayout.BeginHorizontal();
+                    string[] beams = { "Straight", "Wave", "Spiral" };
+                    for (int i = 0; i < beams.Length; i++)
+                        if (GUILayout.Button(beams[i], plugin.Settings.GunBeamStyle.Value == i ? enabledStyle : disabledStyle, GUILayout.Height(31f)))
+                            plugin.Settings.GunBeamStyle.Value = i;
+                    GUILayout.EndHorizontal();
+                    GUILayout.Label("RETICLE", smallStyle);
+                    GUILayout.BeginHorizontal();
+                    string[] shapes = { "Orb", "Block", "Ring", "Diamond" };
+                    for (int i = 0; i < shapes.Length; i++)
+                        if (GUILayout.Button(shapes[i], plugin.Settings.GunReticleStyle.Value == i ? enabledStyle : disabledStyle, GUILayout.Height(31f)))
+                            plugin.Settings.GunReticleStyle.Value = i;
+                    GUILayout.EndHorizontal();
+                    var settings = plugin.Settings;
+                    bool glow = GUILayout.Toggle(settings.GunGlow.Value, "Soft glow");
+                    bool rainbow = GUILayout.Toggle(settings.GunRainbow.Value, "Rainbow pointer");
+                    bool pulse = GUILayout.Toggle(settings.GunPulse.Value, "Pulse animation");
+                    if (settings.GunGlow.Value != glow) settings.GunGlow.Value = glow;
+                    if (settings.GunRainbow.Value != rainbow) settings.GunRainbow.Value = rainbow;
+                    if (settings.GunPulse.Value != pulse) settings.GunPulse.Value = pulse;
+                    GUILayout.Label("BEAM WIDTH " + settings.GunBeamWidth.Value.ToString("0.000") + " m", smallStyle);
+                    float width = GUILayout.HorizontalSlider(settings.GunBeamWidth.Value, 0.002f, 0.06f);
+                    if (Mathf.Abs(width - settings.GunBeamWidth.Value) > 0.001f) settings.GunBeamWidth.Value = width;
+                    GUILayout.Label("ANIMATION SPEED " + settings.GunAnimationSpeed.Value.ToString("0.0") + "x", smallStyle);
+                    float anim = GUILayout.HorizontalSlider(settings.GunAnimationSpeed.Value, 0.15f, 4f);
+                    if (Mathf.Abs(anim - settings.GunAnimationSpeed.Value) > 0.03f) settings.GunAnimationSpeed.Value = anim;
                 }
                 if (categories[selectedCategory] == "Settings")
                 {
