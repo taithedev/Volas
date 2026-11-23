@@ -54,6 +54,12 @@
     <Reference Include="UnityEngine.IMGUIModule">
       <HintPath>$(ManagedDir)\UnityEngine.IMGUIModule.dll</HintPath><Private>false</Private>
     </Reference>
+    <Reference Include="UnityEngine.UI">
+      <HintPath>$(ManagedDir)\UnityEngine.UI.dll</HintPath><Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UIModule">
+      <HintPath>$(ManagedDir)\UnityEngine.UIModule.dll</HintPath><Private>false</Private>
+    </Reference>
     <Reference Include="UnityEngine.InputLegacyModule">
       <HintPath>$(ManagedDir)\UnityEngine.InputLegacyModule.dll</HintPath><Private>false</Private>
     </Reference>
@@ -85,6 +91,10 @@
            Text="Volas: BepInEx 5 Mono not installed at $(BepInExDir). Check Gorilla Tag's game folder." />
     <Error Condition="!Exists('$(ManagedDir)\UnityEngine.IMGUIModule.dll')"
            Text="Volas: UnityEngine.IMGUIModule.dll missing at $(ManagedDir)." />
+    <Error Condition="!Exists('$(ManagedDir)\UnityEngine.UI.dll')"
+           Text="Volas uGUI requires UnityEngine.UI.dll in the game Managed folder." />
+    <Error Condition="!Exists('$(ManagedDir)\UnityEngine.UIModule.dll')"
+           Text="Volas uGUI requires UnityEngine.UIModule.dll in the game Managed folder." />
     <Error Condition="!Exists('$(ManagedDir)\UnityEngine.InputLegacyModule.dll')"
            Text="Volas: UnityEngine.InputLegacyModule.dll missing at $(ManagedDir)." />
     <Error Condition="!Exists('$(ManagedDir)\UnityEngine.PhysicsModule.dll')"
