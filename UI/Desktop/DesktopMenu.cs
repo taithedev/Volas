@@ -37,22 +37,25 @@ namespace Volas
         private GUIStyle searchField;
         private GUIStyle noStyle;
 
-        private static readonly Color Ink = new Color(0.022f, 0.024f, 0.031f, 0.96f);
-        private static readonly Color Header = new Color(0.035f, 0.037f, 0.046f, 0.98f);
-        private static readonly Color Surface = new Color(0.052f, 0.056f, 0.068f, 0.90f);
-        private static readonly Color Hover = new Color(0.12f, 0.125f, 0.145f, 0.97f);
-        private static readonly Color Border = new Color(1f, 1f, 1f, 0.11f);
-        private static readonly Color Muted = new Color(0.59f, 0.60f, 0.64f);
-        private static readonly Color White = new Color(0.98f, 0.98f, 1f);
-        private static readonly Color Soft = new Color(0.82f, 0.83f, 0.86f);
+        private static readonly Color Ink = new Color(0.032f, 0.028f, 0.047f, 0.94f);
+        private static readonly Color Header = new Color(0.025f, 0.022f, 0.038f, 0.48f);
+        private static readonly Color Surface = new Color(0.056f, 0.048f, 0.077f, 0.59f);
+        private static readonly Color Hover = new Color(0.117f, 0.086f, 0.170f, 0.73f);
+        private static readonly Color Border = new Color(0.72f, 0.69f, 0.81f, 0.07f);
+        private static readonly Color Muted = new Color(0.41f, 0.40f, 0.47f);
+        private static readonly Color White = new Color(0.89f, 0.88f, 0.94f);
+        private static readonly Color Soft = new Color(0.65f, 0.64f, 0.71f);
+        private static readonly Color Violet = new Color(0.43f, 0.22f, 0.82f);
+        private static readonly Color SearchSurface = new Color(0.070f, 0.059f, 0.105f, 0.70f);
+        private GUIStyle textAccent;
 
         internal DesktopMenu(VolasPlugin owner)
         {
             plugin = owner;
             window = new Rect(
                 owner.Settings.WindowX.Value, owner.Settings.WindowY.Value,
-                Mathf.Max(770f, owner.Settings.WindowWidth.Value),
-                Mathf.Max(520f, owner.Settings.WindowHeight.Value));
+                Mathf.Max(630f, owner.Settings.WindowWidth.Value),
+                Mathf.Max(420f, owner.Settings.WindowHeight.Value));
         }
 
         internal void Draw()
@@ -86,42 +89,50 @@ namespace Volas
         {
             float w = window.width;
             float h = window.height;
-            Fill(new Rect(0f, 0f, w, 36f), Header);
-            Fill(new Rect(0f, 0f, w, 2f), White);
-            DrawText(new Rect(18f, 7f, 98f, 27f), "volas", textTitle);
-            DrawText(new Rect(110f, 11f, 104f, 21f), "v1.4  /  PC", textDim);
 
-            float rightSpace = 205f;
-            DrawText(new Rect(w - rightSpace - 23, 11, 20, 20), "⌕", textNormal);
-            search = GUI.TextField(new Rect(w - rightSpace, 6, 145, 25), search ?? "", searchField);
-            if (Button(new Rect(w - 57f, 6f, 26f, 24f), "SET", true))
+            // Compact top strip: no bright border, oversized logo or footer chrome.
+            Fill(new Rect(12f, 2f, w - 24f, 32f), Header);
+            DrawText(new Rect(14f, 7f, 64f, 23f), "volas", textTitle);
+            DrawText(new Rect(78f, 9f, 74f, 20f), "v1.4.0", textDim);
+
+            Rect searchRect = new Rect(w - 261f, 6f, 189f, 24f);
+            Fill(searchRect, SearchSurface);
+            GUI.SetNextControlName("VolasSearch");
+            search = GUI.TextField(new Rect(searchRect.x + 20f, 7f, searchRect.width - 24f, 22f),
+                search ?? "", searchField);
+            if (string.IsNullOrEmpty(search) && GUI.GetNameOfFocusedControl() != "VolasSearch")
+            {
+                DrawText(new Rect(searchRect.x + 7f, 8f, 15f, 20f), "⌕", textAccent);
+                DrawText(new Rect(searchRect.x + 26f, 9f, 130f, 18f), "search...", textDim);
+            }
+
+            if (GUI.Button(new Rect(w - 63f, 4f, 28f, 29f), "", noStyle))
                 Navigate("Settings");
-            if (Button(new Rect(w - 29f, 6f, 23f, 24f), "x", true))
+            DrawText(new Rect(w - 59f, 7f, 24f, 22f), "⚙", textNormal);
+            if (GUI.Button(new Rect(w - 33f, 4f, 25f, 29f), "", noStyle))
                 plugin.DesktopOpen = false;
+            DrawText(new Rect(w - 28f, 8f, 20f, 22f), "×", textDim);
 
-            Fill(new Rect(0, 37, w, 1), Border);
-            DrawNavigation(new Rect(16, 41, w - 32, 30));
-            Fill(new Rect(0, 74, w, 1), Border);
+            Fill(new Rect(8f, 35f, w - 16f, 1f), Border);
+            DrawNavigation(new Rect(12f, 38f, w - 24f, 36f));
+            Fill(new Rect(8f, 73f, w - 16f, 1f), Border);
 
-            Rect body = new Rect(15, 85, w - 30, h - 118);
+            Rect body = new Rect(15f, 81f, w - 30f, h - 101f);
             if (!string.IsNullOrWhiteSpace(search))
                 DrawCategoryView(body, "Search", SearchResults());
             else if (page == "Home")
                 DrawHome(body);
             else if (page == "Enabled")
-                DrawCategoryView(body, page, EnabledFeatures());
+                DrawCategoryView(body, "Enabled", EnabledFeatures());
             else
-                DrawCategoryView(body, page, plugin.Features.InCategory(page));
+                DrawCategoryView(body, page, plugin.Features.InCategory(ResolveCategory(page)));
 
-            Fill(new Rect(0, h - 29, w, 1), Border);
-            DrawText(new Rect(16, h - 24, w - 176, 20),
-                plugin.Features.LastMessage, textDim);
-            DrawText(new Rect(w - 182, h - 24, 164, 20),
-                "F6 HIDE  /  END RESET", textDim);
-            Fill(new Rect(w - 16, h - 9, 11, 1), Soft);
-            Fill(new Rect(w - 11, h - 14, 1, 11), Soft);
+            // Keep feedback unobtrusive; the screenshot's home surface is clean.
+            if (page != "Home" || !string.IsNullOrWhiteSpace(search))
+                DrawText(new Rect(20f, h - 18f, w - 53f, 16f),
+                    ClipText(plugin.Features.LastMessage, 120), textDim);
 
-            var grip = new Rect(w - 30f, h - 29f, 30f, 29f);
+            Rect grip = new Rect(w - 26f, h - 25f, 26f, 25f);
             Event e = Event.current;
             if (e.type == EventType.MouseDown && e.button == 0 && grip.Contains(e.mousePosition))
             {
@@ -130,119 +141,100 @@ namespace Volas
             }
             if (e.type == EventType.MouseDrag && resizing)
             {
-                window.width = Mathf.Clamp(window.width + e.delta.x, 550f, Mathf.Max(550, Screen.width - 12));
-                window.height = Mathf.Clamp(window.height + e.delta.y, 360f, Mathf.Max(360, Screen.height - 12));
+                window.width = Mathf.Clamp(window.width + e.delta.x, 630f,
+                    Mathf.Max(630f, Screen.width - 12f));
+                window.height = Mathf.Clamp(window.height + e.delta.y, 420f,
+                    Mathf.Max(420f, Screen.height - 12f));
                 e.Use();
             }
-            if (e.type == EventType.MouseUp)
-                resizing = false;
+            if (e.type == EventType.MouseUp) resizing = false;
+            Fill(new Rect(w - 11f, h - 9f, 7f, 1f), Border);
+            Fill(new Rect(w - 8f, h - 12f, 1f, 7f), Border);
+            GUI.DragWindow(new Rect(0f, 0f, Mathf.Max(80f, w - 275f), 35f));
+        }
 
-            GUI.DragWindow(new Rect(0, 0, w - 230f, 36f));
+        private static string ResolveCategory(string displayedName)
+        {
+            switch (displayedName)
+            {
+                case "Players": return "Telemetry";
+                case "Projectiles": return "Gun Mods";
+                case "Fun": return "Utilities";
+                case "VR Rig": return "Settings";
+                default: return displayedName;
+            }
         }
 
         private void DrawNavigation(Rect area)
         {
-            var tabs = new List<string> { "Home", "All", "Favorites", "Enabled" };
-            foreach (string name in plugin.Features.Categories)
-                if (!tabs.Contains(name)) tabs.Add(name);
-            float total = 6;
-            foreach (var tab in tabs) total += Mathf.Max(61f, tab.Length * 7.1f + 24f);
+            // The visual ordering follows the supplied Untitled desktop reference.
+            // Empty sections stay empty until features are registered: no fake mods.
+            string[] tabs = {
+                "Settings", "Home", "Players", "VR Rig", "Movement", "Visuals",
+                "Overpowered", "Master", "Global", "Gamemode", "Fun", "Plugin",
+                "Zones", "Safety", "Projectiles", "Favorites", "Enabled", "All"
+            };
+            float totalWidth = 3f;
+            for (int i = 0; i < tabs.Length; i++)
+                totalWidth += Mathf.Max(44f, tabs[i].Length * 5.65f + 17f);
 
             navigationScroll = GUI.BeginScrollView(area, navigationScroll,
-                new Rect(0, 0, Mathf.Max(total, area.width - 2), 29), false, false);
-            float x = 0;
-            float targetX = 0;
-            float targetWidth = 48;
-            foreach (string tab in tabs)
+                new Rect(0f, 0f, Mathf.Max(totalWidth, area.width - 2f), 34f), false, false);
+            float x = 0f, targetX = 0f, targetWidth = 30f;
+            for (int i = 0; i < tabs.Length; i++)
             {
-                float width = Mathf.Max(61f, tab.Length * 7.1f + 24f);
-                bool active = string.IsNullOrEmpty(search) && page == tab;
-                if (GUI.Button(new Rect(x, 0, width - 5, 26), tab.ToLowerInvariant(), noStyle))
+                string tab = tabs[i];
+                float tabWidth = Mathf.Max(44f, tab.Length * 5.65f + 17f);
+                bool active = page == tab && string.IsNullOrWhiteSpace(search);
+                if (GUI.Button(new Rect(x, 0f, tabWidth - 2f, 29f), "", noStyle))
                     Navigate(tab);
-                DrawText(new Rect(x + 7, 1, width - 10, 21), tab.ToLowerInvariant(),
-                    active ? textBold : textDim);
+                DrawText(new Rect(x + 7f, 7f, tabWidth - 10f, 20f),
+                    tab.ToLowerInvariant(), active ? textNormal : textDim);
                 if (active)
                 {
-                    targetX = x + 7;
-                    targetWidth = width - 19;
+                    targetX = x + 7f;
+                    targetWidth = tabWidth - 19f;
                 }
-                x += width;
+                x += tabWidth;
             }
-            float blend = Mathf.Clamp01(Time.unscaledDeltaTime * 13f);
-            if (underlineX < 0f) { underlineX = targetX; underlineWidth = targetWidth; }
+            float blend = Mathf.Clamp01(Time.unscaledDeltaTime * 18f);
+            if (underlineX < 0f)
+            {
+                underlineX = targetX;
+                underlineWidth = targetWidth;
+            }
             underlineX = Mathf.Lerp(underlineX, targetX, blend);
             underlineWidth = Mathf.Lerp(underlineWidth, targetWidth, blend);
             if (string.IsNullOrWhiteSpace(search))
-                Fill(new Rect(underlineX, 27, underlineWidth, 2), White);
+                Fill(new Rect(underlineX, 32f, underlineWidth, 2f), Violet);
             GUI.EndScrollView();
         }
 
         private void DrawHome(Rect area)
         {
-            DrawText(new Rect(area.x + 5, area.y - 2, 400, 29), "Home", textBold);
-            DrawText(new Rect(area.x + 5, area.y + 27, 500, 23),
-                "Your Volas dashboard. Choose a category or toggle a saved mod.", textDim);
-
-            float top = area.y + 60f;
-            float gap = 10;
-            float colWidth = (area.width - gap * 2f) / 3f;
-            Rect left = new Rect(area.x, top, colWidth, area.height - 63);
-            Rect middle = new Rect(area.x + colWidth + gap, top, colWidth, area.height - 63);
-            Rect right = new Rect(area.x + 2f * (colWidth + gap), top, colWidth, area.height - 63);
-            Panel(left);
-            Panel(middle);
-            Panel(right);
-
-            ColumnTitle(left, "CATEGORIES", plugin.Features.Categories.Count.ToString());
-            float y = left.y + 43;
-            foreach (string name in plugin.Features.Categories)
+            // Three flush columns with quiet, unboxed rows, as in the reference.
+            const float gap = 11f;
+            float columnWidth = (area.width - 2f * gap) / 3f;
+            float rowHeight = 43f;
+            string[][] columns = {
+                new [] { "Settings", "Players", "Visuals", "Global", "Plugin", "Projectiles" },
+                new [] { "Favorites", "VR Rig", "Overpowered", "Gamemode", "Zone Locked", "Custom Categories" },
+                new [] { "Enabled", "Movement", "Masterclient", "Fun", "Help And Safety" }
+            };
+            for (int column = 0; column < columns.Length; column++)
             {
-                if (name == "All" || name == "Favorites") continue;
-                if (y + 34 > left.yMax - 5) break;
-                if (HomeRow(new Rect(left.x + 8, y, left.width - 16, 34), name, ">"))
-                    Navigate(name);
-                y += 43;
+                float x = area.x + column * (columnWidth + gap);
+                for (int index = 0; index < columns[column].Length; index++)
+                {
+                    float y = area.y + index * rowHeight;
+                    if (y + rowHeight > area.yMax) break;
+                    string name = columns[column][index];
+                    if (HomeRow(new Rect(x, y, columnWidth, rowHeight - 5f), name, ""))
+                    {
+                        Navigate(name);
+                    }
+                }
             }
-
-            var favorites = plugin.Features.InCategory("Favorites");
-            ColumnTitle(middle, "FAVORITES", favorites.Count.ToString());
-            y = middle.y + 43;
-            if (favorites.Count == 0)
-            {
-                DrawText(new Rect(middle.x + 15, y + 8, middle.width - 30, 48),
-                    "Star mods to pin them here.", textDim);
-            }
-            foreach (var f in favorites)
-            {
-                if (y + 34 > middle.yMax - 5) break;
-                if (HomeRow(new Rect(middle.x + 8, y, middle.width - 16, 34),
-                    f.Label, f.Enabled ? "ON" : "OFF"))
-                    plugin.Features.Activate(f);
-                y += 43;
-            }
-
-            var enabled = EnabledFeatures();
-            ColumnTitle(right, "ENABLED", enabled.Count.ToString());
-            y = right.y + 43;
-            if (enabled.Count == 0)
-            {
-                DrawText(new Rect(right.x + 15, y + 8, right.width - 30, 48),
-                    "No active mods.", textDim);
-            }
-            foreach (var f in enabled)
-            {
-                if (y + 34 > right.yMax - 5) break;
-                if (HomeRow(new Rect(right.x + 8, y, right.width - 16, 34),
-                    f.Label, "ON"))
-                    plugin.Features.Activate(f);
-                y += 43;
-            }
-
-            if (GUI.Button(new Rect(right.x + 8, right.yMax - 46, right.width - 16, 31),
-                "DISABLE ALL", noStyle))
-                plugin.Features.DisableAll();
-            DrawText(new Rect(right.x + 17, right.yMax - 43, right.width - 34, 24),
-                "DISABLE ALL", textSmall);
         }
 
         private void DrawCategoryView(Rect area, string category, List<Feature> features)
