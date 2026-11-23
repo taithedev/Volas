@@ -11,6 +11,7 @@ namespace Volas
         private Vector2 scroll;
         private int selectedCategory;
         private bool resizing;
+        private string search = "";
         private GUIStyle windowStyle;
         private GUIStyle titleStyle;
         private GUIStyle smallStyle;
@@ -24,7 +25,15 @@ namespace Volas
         private Texture2D hover;
         private Texture2D white;
 
-        internal DesktopMenu(VolasPlugin owner) { plugin = owner; }
+        internal DesktopMenu(VolasPlugin owner)
+        {
+            plugin = owner;
+            window = new Rect(
+                plugin.Settings.WindowX.Value,
+                plugin.Settings.WindowY.Value,
+                Mathf.Clamp(plugin.Settings.WindowWidth.Value, 390f, 980f),
+                Mathf.Clamp(plugin.Settings.WindowHeight.Value, 355f, 880f));
+        }
 
         internal void Draw()
         {
@@ -44,6 +53,7 @@ namespace Volas
             window.x = Mathf.Clamp(window.x, 0f, Mathf.Max(0f, Screen.width - 75f));
             window.y = Mathf.Clamp(window.y, 0f, Mathf.Max(0f, Screen.height - 38f));
             window = GUI.Window(289109, window, DrawWindow, "", windowStyle);
+            if (Event.current.type == EventType.MouseUp) SaveWindow();
         }
 
         private void DrawTelemetry()
@@ -73,7 +83,7 @@ namespace Volas
             GUI.DrawTexture(new Rect(0f, 0f, window.width, 5f), white);
             GUI.color = savedColor;
             GUI.Label(new Rect(20f, 13f, 225f, 33f), "VOLAS", titleStyle);
-            GUI.Label(new Rect(window.width - 192f, 21f, 170f, 25f), "GTAG / BepInEx 5 / v1.0", smallStyle);
+            GUI.Label(new Rect(window.width - 192f, 21f, 170f, 25f), "GTAG / BepInEx 5 / v1.1", smallStyle);
             GUI.Label(new Rect(22f, 52f, window.width - 43f, 22f), plugin.Game.RoomSummary(), smallStyle);
 
             GUILayout.BeginArea(new Rect(16f, 82f, window.width - 32f, window.height - 143f));
@@ -89,18 +99,49 @@ namespace Volas
                         selectedCategory = i;
                 }
                 GUILayout.EndHorizontal();
-                GUILayout.Space(10f);
+                GUILayout.Space(9f);
+                GUILayout.BeginHorizontal();
+                GUILayout.Label("SEARCH", smallStyle, GUILayout.Width(55f));
+                search = GUILayout.TextField(search ?? "", GUILayout.Height(26f));
+                if (GUILayout.Button("CLEAR", disabledStyle, GUILayout.Width(54f), GUILayout.Height(26f))) search = "";
+                GUILayout.EndHorizontal();
+                GUILayout.Space(5f);
+                if (categories[selectedCategory] == "Settings")
+                {
+                    GUILayout.Label("ACCENT COLOR", smallStyle);
+                    float hue = GUILayout.HorizontalSlider(plugin.Settings.AccentHue.Value, 0f, 1f);
+                    if (Mathf.Abs(hue - plugin.Settings.AccentHue.Value) > 0.005f)
+                        plugin.Settings.AccentHue.Value = hue;
+                    GUILayout.Label("VR MENU SCALE", smallStyle);
+                    float scale = GUILayout.HorizontalSlider(plugin.Settings.VrScale.Value, 0.65f, 1.30f);
+                    if (Mathf.Abs(scale - plugin.Settings.VrScale.Value) > 0.015f)
+                        plugin.Settings.VrScale.Value = scale;
+                }
                 scroll = GUILayout.BeginScrollView(scroll);
+                int visibleCount = 0;
                 foreach (var feature in plugin.Features.InCategory(categories[selectedCategory]))
                 {
+                    if (!string.IsNullOrWhiteSpace(search) &&
+                        feature.Label.IndexOf(search, StringComparison.OrdinalIgnoreCase) < 0 &&
+                        feature.Id.IndexOf(search, StringComparison.OrdinalIgnoreCase) < 0 &&
+                        feature.Description.IndexOf(search, StringComparison.OrdinalIgnoreCase) < 0)
+                        continue;
+                    visibleCount++;
+                    GUILayout.BeginHorizontal();
                     string state = feature.ActionOnly ? "RUN" : feature.Enabled ? "ON" : "OFF";
                     string label = feature.Label + "    /    " + state;
                     GUIStyle style = feature.Enabled ? enabledStyle : lineStyle;
-                    if (GUILayout.Button(new GUIContent(label, feature.Description), style, GUILayout.Height(42f)))
+                    if (GUILayout.Button(new GUIContent(label, feature.Description), style, GUILayout.Height(39f)))
                         plugin.Features.Activate(feature);
-                    GUILayout.Label(feature.Description, smallStyle, GUILayout.Height(27f));
-                    GUILayout.Space(4f);
+                    if (GUILayout.Button(plugin.Features.IsFavorite(feature) ? "★" : "☆",
+                        disabledStyle, GUILayout.Width(37f), GUILayout.Height(39f)))
+                        plugin.Features.ToggleFavorite(feature);
+                    GUILayout.EndHorizontal();
+                    GUILayout.Label(feature.Description, smallStyle, GUILayout.Height(25f));
+                    GUILayout.Space(3f);
                 }
+                if (visibleCount == 0)
+                    GUILayout.Label("No matching features. Search or favorite mods in another category.", smallStyle);
                 GUILayout.EndScrollView();
             }
             GUILayout.EndArea();
@@ -127,6 +168,18 @@ namespace Volas
             if (e.type == EventType.MouseUp)
                 resizing = false;
             GUI.DragWindow(new Rect(0f, 0f, window.width - 34f, 45f));
+        }
+
+        private void SaveWindow()
+        {
+            if (Mathf.Abs(plugin.Settings.WindowX.Value - window.x) > 0.5f)
+                plugin.Settings.WindowX.Value = window.x;
+            if (Mathf.Abs(plugin.Settings.WindowY.Value - window.y) > 0.5f)
+                plugin.Settings.WindowY.Value = window.y;
+            if (Mathf.Abs(plugin.Settings.WindowWidth.Value - window.width) > 0.5f)
+                plugin.Settings.WindowWidth.Value = window.width;
+            if (Mathf.Abs(plugin.Settings.WindowHeight.Value - window.height) > 0.5f)
+                plugin.Settings.WindowHeight.Value = window.height;
         }
 
         private void InitializeStyles()

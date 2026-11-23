@@ -46,7 +46,7 @@ namespace Volas
             Vector3 towardsEyes = camera.transform.position - root.transform.position;
             if (towardsEyes.sqrMagnitude > 0.001f)
                 root.transform.rotation = Quaternion.LookRotation(towardsEyes.normalized, Vector3.up);
-            root.transform.localScale = Vector3.one * (plugin.Compact ? 0.8f : 1f);
+            root.transform.localScale = Vector3.one * plugin.Settings.VrScale.Value * (plugin.Compact ? 0.8f : 1f);
 
             if (seenRevision != plugin.Features.Revision)
                 Rebuild();
@@ -110,6 +110,9 @@ namespace Volas
                 page = 0;
                 seenRevision = -1;
             });
+
+            if (features.Count == 0)
+                Text("NO FAVORITES YET - USE PC MENU", -0.22f, 0.045f, 0.012f, Color.white);
 
             int start = page * PageSize;
             for (int i = 0; i < PageSize && start + i < features.Count; i++)

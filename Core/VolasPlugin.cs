@@ -6,7 +6,7 @@ using UnityEngine.XR;
 
 namespace Volas
 {
-    [BepInPlugin("com.volas.gtag", "Volas", "1.0.0")]
+    [BepInPlugin("com.volas.gtag", "Volas", "1.1.0")]
     public sealed class VolasPlugin : BaseUnityPlugin
     {
         internal static VolasPlugin Instance { get; private set; }
@@ -16,20 +16,31 @@ namespace Volas
         internal VisualEffects Effects { get; private set; }
         internal MovementEffects Movement { get; private set; }
         internal VrMenu Vr { get; private set; }
+        internal VolasConfiguration Settings { get; private set; }
         private DesktopMenu desktop;
         private bool lastVrButton;
 
         internal bool VrOpen { get; set; }
         internal bool DesktopOpen { get; set; }
-        internal bool Compact { get; set; }
-        internal bool RainbowTheme { get; set; }
+        private bool compact;
+        private bool rainbowTheme;
+        internal bool Compact
+        {
+            get { return compact; }
+            set { compact = value; if (Settings != null) Settings.CompactMenu.Value = value; }
+        }
+        internal bool RainbowTheme
+        {
+            get { return rainbowTheme; }
+            set { rainbowTheme = value; if (Settings != null) Settings.RainbowAccent.Value = value; }
+        }
         internal Color Accent
         {
             get
             {
                 return RainbowTheme
                     ? Color.HSVToRGB(Mathf.Repeat(Time.unscaledTime * 0.13f, 1f), 0.72f, 1f)
-                    : new Color(0.23f, 0.85f, 1f);
+                    : Color.HSVToRGB(Settings != null ? Settings.AccentHue.Value : 0.52f, 0.72f, 1f);
             }
         }
 
@@ -39,11 +50,16 @@ namespace Volas
         private void Awake()
         {
             Instance = this;
+            Settings = new VolasConfiguration(Config);
+            Compact = Settings.CompactMenu.Value;
+            RainbowTheme = Settings.RainbowAccent.Value;
+            DesktopOpen = Settings.OpenDesktopOnLaunch.Value;
             Game = new GameBridge();
             Effects = new VisualEffects(this);
             Movement = new MovementEffects(this);
             Features = new FeatureRegistry(this);
             FeatureCatalog.Register(this);
+            Features.LoadFavorites(Settings.FavoriteIds.Value);
             Vr = new VrMenu(this);
             desktop = new DesktopMenu(this);
             Logger.LogInfo("Volas loaded. F6 = desktop menu, left Y = VR menu, End = reset mods.");
@@ -55,10 +71,10 @@ namespace Volas
             FramesPerSecond = 1f / smoothFrameDelta;
             Game.Refresh();
 
-            if (Input.GetKeyDown(KeyCode.F6))
+            if (Settings.DesktopShortcut.Value.IsDown())
                 DesktopOpen = !DesktopOpen;
 
-            if (Input.GetKeyDown(KeyCode.End))
+            if (Settings.ResetShortcut.Value.IsDown())
             {
                 Features.DisableAll();
                 Logger.LogInfo("Volas: all active features disabled.");

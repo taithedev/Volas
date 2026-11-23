@@ -40,6 +40,7 @@ namespace Volas
         private readonly VolasPlugin plugin;
         internal readonly List<Feature> All = new List<Feature>();
         internal readonly List<string> Categories = new List<string>();
+        private readonly HashSet<string> favorites = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         internal int Revision { get; private set; }
         internal string LastMessage { get; private set; } = "Ready";
 
@@ -49,6 +50,7 @@ namespace Volas
         {
             if (Find(f.Id) != null) throw new InvalidOperationException("Duplicate Volas feature: " + f.Id);
             All.Add(f);
+            if (Categories.Count == 0) Categories.Add("Favorites");
             if (!Categories.Contains(f.Category)) Categories.Add(f.Category);
             Revision++;
         }
@@ -66,7 +68,36 @@ namespace Volas
 
         internal List<Feature> InCategory(string category)
         {
-            return All.FindAll(f => f.Category == category);
+            return category == "Favorites"
+                ? All.FindAll(f => favorites.Contains(f.Id))
+                : All.FindAll(f => f.Category == category);
+        }
+
+        internal bool IsFavorite(Feature feature)
+        {
+            return feature != null && favorites.Contains(feature.Id);
+        }
+
+        internal void LoadFavorites(string serialized)
+        {
+            favorites.Clear();
+            foreach (string id in (serialized ?? "").Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries))
+            {
+                string cleaned = id.Trim();
+                if (Find(cleaned) != null) favorites.Add(cleaned);
+            }
+            Revision++;
+        }
+
+        internal void ToggleFavorite(Feature feature)
+        {
+            if (feature == null) return;
+            if (!favorites.Add(feature.Id)) favorites.Remove(feature.Id);
+            var saved = new List<string>(favorites);
+            saved.Sort(StringComparer.OrdinalIgnoreCase);
+            plugin.Settings.FavoriteIds.Value = string.Join(",", saved.ToArray());
+            LastMessage = feature.Label + (IsFavorite(feature) ? " added to favorites" : " removed from favorites");
+            Revision++;
         }
 
         internal void Activate(Feature f)
@@ -145,6 +176,11 @@ namespace Volas
             foreach (var f in All)
             {
                 if (!f.Enabled) continue;
+                if (f.NeedsModdedRoom && !plugin.Game.IsSoloOrModdedRoom())
+                {
+                    Disable(f);
+                    continue;
+                }
                 try { f.OnFixedUpdate?.Invoke(plugin); }
                 catch (Exception ex) { Fault(f, ex); Disable(f); }
             }
