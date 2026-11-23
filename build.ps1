@@ -23,14 +23,14 @@ if (-not (Test-Path (Join-Path $GamePath "BepInEx\core\BepInEx.dll"))) {
 }
 
 Write-Host "Building Volas for: $GamePath"
-$args = @(
+$buildArgs = @(
     "build",
     (Join-Path $PSScriptRoot "Volas.csproj"),
     "-c", "Release",
     "-p:GorillaTagDir=$GamePath"
 )
-if ($Install) { $args += "-p:InstallToGame=true" }
-& dotnet @args
+if ($Install) { $buildArgs += "-p:InstallToGame=true" }
+& dotnet @buildArgs
 if ($LASTEXITCODE -ne 0) { throw "Volas build failed." }
 Write-Host "Volas.dll is at bin\Release\net472\Volas.dll"
 if ($Install) { Write-Host "Installed to: $GamePath\BepInEx\plugins\Volas.dll" }
