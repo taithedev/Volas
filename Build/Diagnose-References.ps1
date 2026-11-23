@@ -22,6 +22,8 @@ $files = @(
     (Join-Path $managed "UnityEngine.dll"),
     (Join-Path $managed "UnityEngine.CoreModule.dll"),
     (Join-Path $managed "UnityEngine.IMGUIModule.dll"),
+    (Join-Path $managed "UnityEngine.UI.dll"),
+    (Join-Path $managed "UnityEngine.UIModule.dll"),
     (Join-Path $managed "UnityEngine.InputLegacyModule.dll"),
     (Join-Path $managed "UnityEngine.PhysicsModule.dll"),
     (Join-Path $managed "UnityEngine.XRModule.dll"),
@@ -32,5 +34,17 @@ $files = @(
 foreach ($file in $files) {
     $label = if (Test-Path -LiteralPath $file) { "OK     " } else { "MISSING" }
     Write-Host "$label  $file"
+}
+$facadeCandidates = @(
+    (Join-Path $managed "UnityEngine.dll"),
+    (Join-Path $core "UnityEngine.dll"),
+    (Join-Path $GamePath "BepInEx\plugins\UnityEngine.dll")
+)
+$foundFacade = @($facadeCandidates | Where-Object { Test-Path -LiteralPath $_ })
+if ($foundFacade.Count -gt 0) {
+    Write-Host "UnityEngine.dll facade candidates:" -ForegroundColor Green
+    $foundFacade | ForEach-Object { Write-Host "  $_" }
+} else {
+    Write-Warning "No UnityEngine.dll facade found in game/BepInEx directories. Older BepInEx assemblies referencing UnityEngine can cause CS0012 MonoBehaviour errors. Use matching BepInEx and Unity assemblies; do not download arbitrary UnityEngine.dll files."
 }
 Write-Host "If this still fails: paste the FIRST full CS error and the exact referenced assembly name."
