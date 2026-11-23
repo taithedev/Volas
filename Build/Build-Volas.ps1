@@ -135,6 +135,7 @@ $props = @"
   <PropertyGroup>
     <GorillaTagDir>$escaped</GorillaTagDir>
     <VolasTargetFramework>$Framework</VolasTargetFramework>
+    <UnityEngineFacadePath>$facadeXml</UnityEngineFacadePath>
   </PropertyGroup>
 </Project>
 "@
