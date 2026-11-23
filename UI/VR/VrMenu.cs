@@ -362,7 +362,7 @@ namespace Volas
             UpdateCategories();
 
             Label("VOLAS", -0.216f, 0.348f, .017f, activeHover.color, true);
-            Label("v1.5", -0.074f, 0.348f, .009f, gray.color);
+            Label("v1.4", -0.074f, 0.348f, .009f, gray.color);
             AddButton("HOME", 0.119f, 0.348f, .092f, .048f,
                 buttonRest, () => Open(ScreenMode.Categories), true);
             AddButton("X", .211f, .348f, .048f, .048f,
