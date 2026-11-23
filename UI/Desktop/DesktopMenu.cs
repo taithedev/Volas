@@ -376,7 +376,7 @@ namespace Volas
                     string destination = label == "Masterclient" ? "Master" :
                         label == "Help And Safety" ? "Safety" :
                         label == "Zone Locked" ? "Zones" :
-                        label == "Custom Categories" ? "All" : label;
+                        label;
                     button.onClick.AddListener(() => Navigate(destination));
                     MakeText(highlight.rectTransform, label, 7f, 8f, 223f, 22f,
                         12, new Color(.53f, .52f, .61f, 1f), true);
