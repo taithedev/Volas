@@ -205,20 +205,20 @@ namespace Volas
                 plugin.Log.LogError("Volas physical menu: no supported Unity shader found.");
                 return false;
             }
-            deepBlack = Material(shader, new Color(.018f, .015f, .028f));
-            body = Material(shader, new Color(.055f, .047f, .072f));
-            buttonRest = Material(shader, new Color(.105f, .094f, .14f));
-            buttonHover = Material(shader, new Color(.25f, .17f, .35f));
-            active = Material(shader, new Color(.47f, .23f, .81f));
-            activeHover = Material(shader, new Color(.64f, .39f, .97f));
-            accent = Material(shader, new Color(.40f, .19f, .74f));
-            gray = Material(shader, new Color(.58f, .55f, .65f));
-            light = Material(shader, new Color(.93f, .91f, .97f));
-            buttonOutline = Material(shader, new Color(.14f, .12f, .19f));
+            deepBlack = CreateMaterial(shader, new Color(.018f, .015f, .028f));
+            body = CreateMaterial(shader, new Color(.055f, .047f, .072f));
+            buttonRest = CreateMaterial(shader, new Color(.105f, .094f, .14f));
+            buttonHover = CreateMaterial(shader, new Color(.25f, .17f, .35f));
+            active = CreateMaterial(shader, new Color(.47f, .23f, .81f));
+            activeHover = CreateMaterial(shader, new Color(.64f, .39f, .97f));
+            accent = CreateMaterial(shader, new Color(.40f, .19f, .74f));
+            gray = CreateMaterial(shader, new Color(.58f, .55f, .65f));
+            light = CreateMaterial(shader, new Color(.93f, .91f, .97f));
+            buttonOutline = CreateMaterial(shader, new Color(.14f, .12f, .19f));
             return true;
         }
 
-        private static Material Material(Shader shader, Color color)
+        private static Material CreateMaterial(Shader shader, Color color)
         {
             var material = new Material(shader);
             material.color = color;
