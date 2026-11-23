@@ -305,6 +305,8 @@ namespace Volas
                 lastStatusUpdate = Time.unscaledTime;
                 statusText.text = plugin.Features.LastMessage;
                 if (currentPage == "Home") statusText.text = "";
+                else if (currentPage == "Settings" && plugin.Vr != null)
+                    statusText.text = plugin.Vr.Status + "  |  Y / F7";
             }
         }
 
@@ -434,8 +436,15 @@ namespace Volas
                 () => { plugin.Compact = !plugin.Compact; RedrawPage(); },
                 white, 10);
             MakeButton(controls, "Gun styles", "OPEN GUN STUDIO",
-                14f, 245f, 207f, 37f, purple,
+                14f, 241f, 207f, 37f, purple,
                 () => Navigate("Gun Studio"), white, 11, true);
+            MakeButton(controls, "Physical menu", "OPEN VR MENU / TEST",
+                14f, 288f, 207f, 33f, panelColor,
+                () =>
+                {
+                    plugin.VrOpen = true;
+                    plugin.DesktopOpen = false;
+                }, white, 10, true);
 
             MakeText(safety, "Local-only features by default.",
                 14f, 48f, 203f, 42f, 11, muted);
