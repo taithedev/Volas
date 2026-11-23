@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using BepInEx;
 using BepInEx.Logging;
 using UnityEngine;
@@ -24,6 +25,10 @@ namespace Volas
         internal VolasConfiguration Settings { get; private set; }
         private DesktopMenu desktop;
         private bool lastVrButton;
+        private float nextInputWarning;
+        private bool desktopFaultLogged;
+        private bool vrFaultLogged;
+        private readonly List<InputDevice> leftControllerCandidates = new List<InputDevice>(4);
 
         internal bool VrOpen { get; set; }
         internal bool DesktopOpen { get; set; }
@@ -71,8 +76,10 @@ namespace Volas
             FeatureCatalog.Register(this);
             Features.LoadFavorites(Settings.FavoriteIds.Value);
             Vr = new VrMenu(this);
-            desktop = new DesktopMenu(this);
-            Logger.LogInfo("Volas loaded. F6 = desktop menu, left Y = VR menu, End = reset mods.");
+            // A desktop uGUI initialization failure must never disable the physical VR menu.
+            try { desktop = new DesktopMenu(this); }
+            catch (Exception ex) { Logger.LogError("Volas PC menu initialization failed (VR remains usable): " + ex); }
+            Logger.LogInfo("Volas loaded. F6 = PC menu, left Y = VR menu, F7 = VR test, End = reset.");
             Logger.LogInfo(AssemblyDiagnostics.AssemblyInfo());
         }
 
@@ -91,12 +98,16 @@ namespace Volas
                 Logger.LogInfo("Volas: all active features disabled.");
             }
 
-            bool vrPressed = false;
-            var controller = InputDevices.GetDeviceAtXRNode(XRNode.LeftHand);
-            if (controller.isValid)
-                controller.TryGetFeatureValue(CommonUsages.secondaryButton, out vrPressed);
-            if (vrPressed && !lastVrButton)
+            bool vrPressed = GetLeftYPressed();
+            bool testPressed = Settings.VrFallbackShortcut.Value.IsDown();
+            if ((vrPressed && !lastVrButton) || testPressed)
+            {
                 VrOpen = !VrOpen;
+                Logger.LogInfo("Volas VR menu " + (VrOpen ? "opened" : "closed") +
+                    (testPressed ? " (F7 keyboard)" : " (left Y controller)"));
+                if (VrOpen && !InputDevices.GetDeviceAtXRNode(XRNode.LeftHand).isValid)
+                    Logger.LogWarning("Volas: XRNode.LeftHand not valid; checking alternate tracked input and head-anchored preview.");
+            }
             lastVrButton = vrPressed;
 
             Features.Tick();
@@ -107,8 +118,68 @@ namespace Volas
             Effects.Tick();
             ExtraVisuals.Tick();
             Decorations.Tick();
-            Vr.Tick();
-            if (desktop != null) desktop.Tick();
+            // Keep VR independently operational if the optional desktop UI crashes.
+            try { Vr.Tick(); }
+            catch (Exception ex)
+            {
+                if (!vrFaultLogged || Time.unscaledTime >= nextInputWarning)
+                {
+                    Logger.LogError("Volas physical menu update failed: " + ex);
+                    vrFaultLogged = true;
+                    nextInputWarning = Time.unscaledTime + 10f;
+                }
+            }
+            if (desktop != null)
+            {
+                try { desktop.Tick(); }
+                catch (Exception ex)
+                {
+                    if (!desktopFaultLogged)
+                    {
+                        desktopFaultLogged = true;
+                        Logger.LogError("Volas desktop menu update failed; VR remains available: " + ex);
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// OpenXR/XR SDKs do not all expose Y the same way. Read the standard
+        /// XR secondaryButton on the left device, then tracked left-handed
+        /// controllers, and finally Unity's common legacy Y index.
+        /// </summary>
+        private bool GetLeftYPressed()
+        {
+            bool pressed;
+            InputDevice primary = InputDevices.GetDeviceAtXRNode(XRNode.LeftHand);
+            if (primary.isValid &&
+                primary.TryGetFeatureValue(CommonUsages.secondaryButton, out pressed) && pressed)
+                return true;
+
+            leftControllerCandidates.Clear();
+            InputDevices.GetDevicesWithCharacteristics(
+                InputDeviceCharacteristics.Left | InputDeviceCharacteristics.Controller,
+                leftControllerCandidates);
+            for (int i = 0; i < leftControllerCandidates.Count; i++)
+            {
+                InputDevice device = leftControllerCandidates[i];
+                if (device.isValid &&
+                    device.TryGetFeatureValue(CommonUsages.secondaryButton, out pressed) && pressed)
+                    return true;
+            }
+
+            if (!Settings.VrLegacyYFallback.Value) return false;
+            try
+            {
+                return Input.GetKey(KeyCode.JoystickButton3) ||
+                    Input.GetKey(KeyCode.Joystick1Button3) ||
+                    Input.GetKey(KeyCode.Joystick2Button3);
+            }
+            catch (Exception)
+            {
+                // The game's active Input System may disable legacy joystick APIs.
+                return false;
+            }
         }
 
         private void FixedUpdate()
