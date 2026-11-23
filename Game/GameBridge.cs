@@ -11,6 +11,9 @@ namespace Volas
     {
         private Type playerType;
         private Type photonType;
+        private Type pollerType;
+        private Type gorillaTaggerType;
+        private float nextPollerLookup;
         private Camera cachedCamera;
         private float nextTypeLookup;
         private Transform fallbackLeft;
@@ -21,6 +24,8 @@ namespace Volas
         {
             playerType = FindType("GorillaLocomotion.GTPlayer") ?? FindType("GorillaLocomotion.Player");
             photonType = FindType("Photon.Pun.PhotonNetwork");
+            pollerType = FindType("ControllerInputPoller");
+            gorillaTaggerType = FindType("GorillaTagger");
         }
 
         internal void Refresh()
@@ -103,9 +108,64 @@ namespace Volas
 
         private Transform GetTransform(params string[] names)
         {
-            if (Player == null) return null;
-            var value = GetMember(Player.GetType(), Player, names);
-            return value as Transform ?? (value as GameObject)?.transform;
+            if (Player != null)
+            {
+                object fromPlayer = GetMember(Player.GetType(), Player, names);
+                Transform resolved = fromPlayer as Transform ??
+                    (fromPlayer as GameObject)?.transform;
+                if (resolved != null) return resolved;
+            }
+
+            // Some GT builds expose controller transforms on GorillaTagger
+            // rather than on the locomotion Player singleton.
+            if (gorillaTaggerType == null)
+                gorillaTaggerType = FindType("GorillaTagger");
+            if (gorillaTaggerType != null)
+            {
+                object tagger = GetMember(gorillaTaggerType, null,
+                    "Instance", "instance");
+                if (tagger != null)
+                {
+                    object fromTagger = GetMember(tagger.GetType(), tagger, names);
+                    Transform hand = fromTagger as Transform ??
+                        (fromTagger as GameObject)?.transform;
+                    if (hand != null) return hand;
+                }
+            }
+            return null;
+        }
+
+        // Uses Gorilla Tag's own input poller for SteamVR and Oculus/Meta,
+        // without creating a hard compile-time dependency on game code.
+        internal bool TryControllerButton(string memberName, out bool pressed)
+        {
+            pressed = false;
+            object state = ReadPollerMember(memberName);
+            if (!(state is bool)) return false;
+            pressed = (bool)state;
+            return true;
+        }
+
+        internal bool TryControllerFloat(string memberName, out float value)
+        {
+            value = 0f;
+            object state = ReadPollerMember(memberName);
+            if (state == null) return false;
+            try { value = Convert.ToSingle(state); return true; }
+            catch { return false; }
+        }
+
+        private object ReadPollerMember(string memberName)
+        {
+            if (pollerType == null && Time.unscaledTime >= nextPollerLookup)
+            {
+                pollerType = FindType("ControllerInputPoller");
+                nextPollerLookup = Time.unscaledTime + 2f;
+            }
+            if (pollerType == null) return null;
+            object instance = GetMember(pollerType, null, "instance", "Instance");
+            if (instance == null) return null;
+            return GetMember(instance.GetType(), instance, memberName);
         }
 
         // Some Gorilla Tag releases rename player hand fields. Resolve tracked
