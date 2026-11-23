@@ -68,11 +68,10 @@ $props = @"
 Set-Content -LiteralPath (Join-Path $projectRoot "Volas.Local.props") -Value $props -Encoding UTF8
 # Unity versions differ in their managed runtime profile. When no framework is forced,
 # try the detected target first and fall back to the other supported target on build failure.
-$detected = if (Test-Path -LiteralPath (Join-Path $managed "netstandard.dll")) { "netstandard2.1" } else { "net472" }
+# BepInEx 5 Mono is commonly built against .NET Framework.  Presence of
+# netstandard.dll alone does not establish the correct target framework.
 $candidates = if ($Framework) {
     @($Framework)
-} elseif ($detected -eq "netstandard2.1") {
-    @("netstandard2.1", "net472")
 } else {
     @("net472", "netstandard2.1")
 }
@@ -102,6 +101,16 @@ foreach ($candidate in $candidates) {
 if (-not $built) {
     throw "Volas could not build with the installed game assemblies. Copy the FIRST CS error from the output and check Docs/TROUBLESHOOTING.md. Ensure BepInEx 5 Mono matches this installed game."
 }
+# Visual Studio should use the SAME framework that succeeded here.
+$props = @"
+<Project>
+  <PropertyGroup>
+    <GorillaTagDir>$escaped</GorillaTagDir>
+    <VolasTargetFramework>$Framework</VolasTargetFramework>
+  </PropertyGroup>
+</Project>
+"@
+Set-Content -LiteralPath (Join-Path $projectRoot "Volas.Local.props") -Value $props -Encoding UTF8
 $dll = Join-Path $projectRoot ("bin\Release\" + $Framework + "\Volas.dll")
 if (-not (Test-Path -LiteralPath $dll)) { throw "Expected output was not generated: $dll" }
 Write-Host "SUCCESS: $dll" -ForegroundColor Green
