@@ -7,6 +7,8 @@ obj/
 game/
 BepInEx/
 Gorilla Tag_Data/
+Volas.Local.props
 *.dll
 *.pdb
 *.log
+*.binlog

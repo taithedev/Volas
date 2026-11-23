@@ -1,7 +1,8 @@
 param(
     [string]$GamePath = "",
-    [switch]$Install
+    [switch]$Install,
+    [string]$Framework = ""
 )
-# Backward-compatible entry point. The implementation lives in Build/.
 $ErrorActionPreference = "Stop"
-& (Join-Path $PSScriptRoot "Build\Build-Volas.ps1") -GamePath $GamePath -Install:$Install
+& (Join-Path $PSScriptRoot "Build\Build-Volas.ps1") -GamePath $GamePath -Install:$Install -Framework $Framework
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
