@@ -1,5 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <Import Project="Volas.Local.props" Condition="Exists('Volas.Local.props')" />
+
   <PropertyGroup>
     <GorillaTagDir Condition="'$(GorillaTagDir)' == '' and '$(VOLAS_GAME_DIR)' != ''">$(VOLAS_GAME_DIR)</GorillaTagDir>
     <GorillaTagDir Condition="'$(GorillaTagDir)' == ''">C:\Program Files (x86)\Steam\steamapps\common\Gorilla Tag</GorillaTagDir>
@@ -14,39 +15,56 @@
     <RootNamespace>Volas</RootNamespace>
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <Deterministic>true</Deterministic>
   </PropertyGroup>
-  <!-- Everything is compiled into the single Volas.dll. -->
+
+  <!-- All source folders compile into ONE Volas.dll, including GunLib and optional src. -->
   <ItemGroup>
     <Compile Include="Core\**\*.cs" />
     <Compile Include="Features\**\*.cs" />
     <Compile Include="Game\**\*.cs" />
+    <Compile Include="GunLib\**\*.cs" />
     <Compile Include="Settings\**\*.cs" />
     <Compile Include="UI\**\*.cs" />
+    <Compile Include="src\**\*.cs" Condition="Exists('src')" />
   </ItemGroup>
+
+  <!-- Unity versions move APIs between modules. Reference all game-local UnityEngine
+       assemblies to resolve MonoBehaviour (CS0012) and module dependencies. -->
   <ItemGroup>
-    <Reference Include="BepInEx"><HintPath>$(BepInExDir)\BepInEx.dll</HintPath><Private>false</Private></Reference>
-    <Reference Include="UnityEngine" Condition="Exists('$(ManagedDir)\UnityEngine.dll')"><HintPath>$(ManagedDir)\UnityEngine.dll</HintPath><Private>false</Private></Reference>
-    <Reference Include="UnityEngine.CoreModule"><HintPath>$(ManagedDir)\UnityEngine.CoreModule.dll</HintPath><Private>false</Private></Reference>
-    <Reference Include="UnityEngine.IMGUIModule"><HintPath>$(ManagedDir)\UnityEngine.IMGUIModule.dll</HintPath><Private>false</Private></Reference>
-    <Reference Include="UnityEngine.InputLegacyModule"><HintPath>$(ManagedDir)\UnityEngine.InputLegacyModule.dll</HintPath><Private>false</Private></Reference>
-    <Reference Include="UnityEngine.PhysicsModule"><HintPath>$(ManagedDir)\UnityEngine.PhysicsModule.dll</HintPath><Private>false</Private></Reference>
-    <Reference Include="UnityEngine.XRModule"><HintPath>$(ManagedDir)\UnityEngine.XRModule.dll</HintPath><Private>false</Private></Reference>
-    <Reference Include="UnityEngine.TextRenderingModule"><HintPath>$(ManagedDir)\UnityEngine.TextRenderingModule.dll</HintPath><Private>false</Private></Reference>
-    <Reference Include="UnityEngine.AudioModule"><HintPath>$(ManagedDir)\UnityEngine.AudioModule.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="BepInEx">
+      <HintPath>$(BepInExDir)\BepInEx.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="$(ManagedDir)\UnityEngine*.dll">
+      <Private>false</Private>
+    </Reference>
+    <!-- Legacy UnityEngine.dll can come from the BepInEx core on some installations. -->
+    <Reference Include="UnityEngine" Condition="!Exists('$(ManagedDir)\UnityEngine.dll') and Exists('$(BepInExDir)\UnityEngine.dll')">
+      <HintPath>$(BepInExDir)\UnityEngine.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
   </ItemGroup>
+
   <Target Name="CheckGameReferences" BeforeTargets="ResolveReferences">
-    <Error Condition="!Exists('$(ManagedDir)\UnityEngine.CoreModule.dll')" Text="Volas: Cannot find Gorilla Tag Unity assemblies in $(ManagedDir). Run build.bat, or set GorillaTagDir to the Steam game directory." />
-    <Error Condition="!Exists('$(BepInExDir)\BepInEx.dll')" Text="Volas: BepInEx 5 Mono not found in $(BepInExDir). Install BepInEx 5 Mono into PC Gorilla Tag." />
-    <Error Condition="!Exists('$(ManagedDir)\UnityEngine.IMGUIModule.dll')" Text="Volas: Missing UnityEngine.IMGUIModule.dll in $(ManagedDir)." />
-    <Error Condition="!Exists('$(ManagedDir)\UnityEngine.InputLegacyModule.dll')" Text="Volas: Missing UnityEngine.InputLegacyModule.dll in $(ManagedDir)." />
-    <Error Condition="!Exists('$(ManagedDir)\UnityEngine.PhysicsModule.dll')" Text="Volas: Missing UnityEngine.PhysicsModule.dll in $(ManagedDir)." />
-    <Error Condition="!Exists('$(ManagedDir)\UnityEngine.XRModule.dll')" Text="Volas: Missing UnityEngine.XRModule.dll in $(ManagedDir)." />
-    <Error Condition="!Exists('$(ManagedDir)\UnityEngine.TextRenderingModule.dll')" Text="Volas: Missing UnityEngine.TextRenderingModule.dll in $(ManagedDir)." />
-    <Error Condition="!Exists('$(ManagedDir)\UnityEngine.AudioModule.dll')" Text="Volas: Missing UnityEngine.AudioModule.dll in $(ManagedDir)." />
+    <Message Importance="high" Text="Volas: TargetFramework=$(TargetFramework); ManagedDir=$(ManagedDir)" />
+    <Error Condition="!Exists('$(ManagedDir)\UnityEngine.CoreModule.dll')"
+           Text="Volas: UnityEngine.CoreModule.dll not found in $(ManagedDir). Run build.bat or set GorillaTagDir to your PC Gorilla Tag folder." />
+    <Error Condition="!Exists('$(BepInExDir)\BepInEx.dll')"
+           Text="Volas: BepInEx.dll not found in $(BepInExDir). Install BepInEx 5 Mono for PC Gorilla Tag." />
+    <Error Condition="!Exists('$(ManagedDir)\UnityEngine.IMGUIModule.dll')"
+           Text="Volas: UnityEngine.IMGUIModule.dll missing in $(ManagedDir)." />
+    <Error Condition="!Exists('$(ManagedDir)\UnityEngine.PhysicsModule.dll')"
+           Text="Volas: UnityEngine.PhysicsModule.dll missing in $(ManagedDir)." />
+    <Error Condition="!Exists('$(ManagedDir)\UnityEngine.XRModule.dll')"
+           Text="Volas: UnityEngine.XRModule.dll missing in $(ManagedDir)." />
+    <Error Condition="!Exists('$(ManagedDir)\UnityEngine.InputLegacyModule.dll')"
+           Text="Volas: UnityEngine.InputLegacyModule.dll missing in $(ManagedDir)." />
   </Target>
+
   <Target Name="InstallVolas" AfterTargets="Build" Condition="'$(InstallToGame)' == 'true'">
     <MakeDir Directories="$(GorillaTagDir)\BepInEx\plugins" />
     <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(GorillaTagDir)\BepInEx\plugins" SkipUnchangedFiles="true" />
-    <Message Importance="high" Text="Installed Volas: $(GorillaTagDir)\BepInEx\plugins\Volas.dll" />
+    <Message Importance="high" Text="Volas installed at $(GorillaTagDir)\BepInEx\plugins\Volas.dll" />
   </Target>
 </Project>
