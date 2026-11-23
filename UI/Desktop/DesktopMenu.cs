@@ -1,638 +1,713 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI;
+using UnityEngine.EventSystems;
 
 namespace Volas
 {
-    /// <summary>
-    /// Desktop dashboard modeled after the supplied three-column reference:
-    /// wide glass-black surface, compact top tabs, search, favorites and enabled lists.
-    /// All controls call the same FeatureRegistry as the VR wrist menu.
-    /// </summary>
+    // Runtime Unity uGUI menu. No IMGUI, prefabs, external asset bundles or editor code.
+    // All feature actions go through the existing FeatureRegistry.
     internal sealed class DesktopMenu
     {
         private readonly VolasPlugin plugin;
-        private Rect window;
-        private Vector2 navigationScroll;
-        private Vector2 featureScroll;
-        private Vector2 rightScroll;
-        private string page = "Home";
-        private string search = "";
-        private Feature selectedFeature;
-        private bool resizing;
-        private float underlineX = -1f;
-        private float underlineWidth = 42f;
-        private float lastAppliedOpacity = -1f;
-        private int lastScreenWidth;
-        private int lastScreenHeight;
-        private Texture2D whitePixel;
-        private Texture2D windowTexture;
-        private GUIStyle backgroundStyle;
-        private GUIStyle textSmall;
-        private GUIStyle textDim;
-        private GUIStyle textNormal;
-        private GUIStyle textBold;
-        private GUIStyle textTitle;
-        private GUIStyle textMono;
-        private GUIStyle searchField;
-        private GUIStyle noStyle;
+        private readonly GameObject root;
+        private readonly Canvas canvas;
+        private readonly RectTransform canvasRect;
+        private readonly RectTransform window;
+        private readonly RectTransform pageRoot;
+        private readonly RectTransform navigationContent;
+        private readonly Text statusText;
+        private readonly Text hudText;
+        private readonly Image crosshairH;
+        private readonly Image crosshairV;
+        private readonly Font font;
+        private readonly Sprite rounded;
+        private readonly Sprite softRounded;
+        private InputField searchBox;
+        private string currentPage = "Home";
+        private string currentQuery = "";
+        private Feature selected;
+        private int drawnRevision = -1;
+        private string drawnPage = "";
+        private bool visible;
+        private bool savedCursorVisible;
+        private CursorLockMode savedLockMode;
+        private float lastStatusUpdate;
+        private float lastHUDUpdate;
+        private readonly Color ink = new Color(.023f, .022f, .033f, .96f);
+        private readonly Color headerColor = new Color(.035f, .032f, .050f, .49f);
+        private readonly Color panelColor = new Color(.046f, .043f, .068f, .60f);
+        private readonly Color hoverColor = new Color(.11f, .079f, .16f, .45f);
+        private readonly Color borderColor = new Color(.52f, .46f, .63f, .105f);
+        private readonly Color purple = new Color(.455f, .242f, .91f, 1f);
+        private readonly Color white = new Color(.89f, .87f, .93f, 1f);
+        private readonly Color muted = new Color(.45f, .43f, .51f, 1f);
 
-        private static readonly Color Ink = new Color(0.032f, 0.028f, 0.047f, 0.94f);
-        private static readonly Color Header = new Color(0.025f, 0.022f, 0.038f, 0.48f);
-        private static readonly Color Surface = new Color(0.056f, 0.048f, 0.077f, 0.59f);
-        private static readonly Color Hover = new Color(0.117f, 0.086f, 0.170f, 0.73f);
-        private static readonly Color Border = new Color(0.72f, 0.69f, 0.81f, 0.07f);
-        private static readonly Color Muted = new Color(0.41f, 0.40f, 0.47f);
-        private static readonly Color White = new Color(0.89f, 0.88f, 0.94f);
-        private static readonly Color Soft = new Color(0.65f, 0.64f, 0.71f);
-        private static readonly Color Violet = new Color(0.43f, 0.22f, 0.82f);
-        private static readonly Color SearchSurface = new Color(0.070f, 0.059f, 0.105f, 0.70f);
-        private GUIStyle textAccent;
-        private GUIStyle textTab;
-        private GUIStyle textTabActive;
+        private static readonly string[] Tabs =
+        {
+            "Settings", "Home", "Players", "VR Rig", "Movement", "Visuals",
+            "Overpowered", "Master", "Global", "Gamemode", "Fun", "Plugin",
+            "Zones", "Safety", "Projectiles", "Favorites", "Enabled", "All"
+        };
 
         internal DesktopMenu(VolasPlugin owner)
         {
             plugin = owner;
-            window = new Rect(
-                owner.Settings.WindowX.Value, owner.Settings.WindowY.Value,
-                Mathf.Max(630f, owner.Settings.WindowWidth.Value),
-                Mathf.Max(420f, owner.Settings.WindowHeight.Value));
+            font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+            rounded = MakeRoundSprite(48, 13);
+            softRounded = MakeRoundSprite(48, 8);
+
+            root = new GameObject("Volas Unity UI", typeof(RectTransform),
+                typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
+            UnityEngine.Object.DontDestroyOnLoad(root);
+            canvas = root.GetComponent<Canvas>();
+            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            canvas.sortingOrder = 30000;
+            CanvasScaler scaler = root.GetComponent<CanvasScaler>();
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.referenceResolution = new Vector2(943f, 704f);
+            scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
+            scaler.matchWidthOrHeight = .5f;
+            canvasRect = root.GetComponent<RectTransform>();
+            EnsureEventSystem();
+
+            var shade = MakeImage(canvasRect, "Window Shadow", new Color(0f, 0f, 0f, .22f),
+                rounded, true);
+            Place(shade.rectTransform, 209f, 63f, 767f, 500f);
+            // The shadow lives behind the main window, but moves with the window.
+            window = MakeRect(canvasRect, "Volas Window");
+            Place(window, 202f, 56f, 760f, 500f);
+            shade.transform.SetParent(window, false);
+            Place(shade.rectTransform, 6f, 8f, 760f, 500f);
+            shade.transform.SetAsFirstSibling();
+
+            var background = MakeImage(window, "Frosted dark graphite",
+                new Color(ink.r, ink.g, ink.b, plugin.Settings.DesktopOpacity.Value),
+                rounded, true);
+            Stretch(background.rectTransform);
+            var rim = MakeImage(window, "Subtle border", borderColor, rounded, true);
+            StretchInset(rim.rectTransform, 0f);
+            var inner = MakeImage(window, "Inner glass", new Color(ink.r, ink.g, ink.b, .98f),
+                rounded, true);
+            StretchInset(inner.rectTransform, 1f);
+            inner.color = new Color(.030f, .028f, .043f,
+                plugin.Settings.DesktopOpacity.Value * .85f);
+            var header = MakeImage(window, "Header strip", headerColor, softRounded, true);
+            Place(header.rectTransform, 4f, 3f, 752f, 38f);
+
+            MakeText(window, "volas", 14f, 8f, 62f, 20f, 15, purple, true);
+            MakeText(window, "v1.4.0", 79f, 11f, 72f, 18f, 10, muted);
+            MakeText(window, "⌕", 531f, 9f, 17f, 22f, 15, purple);
+            BuildSearch();
+            MakeText(window, "⚙", 706f, 9f, 18f, 22f, 17, muted);
+            MakeButton(window, "Settings hitbox", "", 697f, 6f, 30f, 28f,
+                Color.clear, () => Navigate("Settings"));
+            MakeText(window, "×", 734f, 9f, 18f, 20f, 17, muted);
+            MakeButton(window, "Close menu", "", 728f, 4f, 25f, 28f,
+                Color.clear, () => plugin.DesktopOpen = false);
+
+            MakeImage(window, "Separator 1", borderColor, null, true).rectTransform
+                .SetAsLastSibling();
+            var sep1 = window.Find("Separator 1") as RectTransform;
+            Place(sep1, 8f, 39f, 744f, 1f);
+
+            RectTransform navViewport = MakeRect(window, "Navigation viewport");
+            Place(navViewport, 13f, 43f, 735f, 32f);
+            var navMask = navViewport.gameObject.AddComponent<RectMask2D>();
+            var scroll = navViewport.gameObject.AddComponent<ScrollRect>();
+            scroll.horizontal = true;
+            scroll.vertical = false;
+            scroll.scrollSensitivity = 30f;
+            scroll.movementType = ScrollRect.MovementType.Clamped;
+            navigationContent = MakeRect(navViewport, "Navigation buttons");
+            AnchorTopLeft(navigationContent);
+            scroll.viewport = navViewport;
+            scroll.content = navigationContent;
+            BuildNavigation();
+
+            var separator = MakeImage(window, "Separator 2", borderColor, null, true);
+            Place(separator.rectTransform, 8f, 76f, 744f, 1f);
+
+            pageRoot = MakeRect(window, "Page content");
+            Place(pageRoot, 15f, 86f, 730f, 387f);
+            statusText = MakeText(window, "", 17f, 473f, 704f, 19f, 9, muted);
+            MakeButton(window, "Resize grip", "⌟", 736f, 474f, 19f, 23f,
+                Color.clear, () => { });
+            var drag = header.gameObject.AddComponent<VolasUIDrag>();
+            drag.Target = window;
+            drag.IsResize = false;
+            drag.OnComplete = SavePosition;
+            // Text and controls sit above the header. The uncovered header still drags.
+            var resizeHitbox = MakeImage(window, "Resize handler", Color.clear);
+            Place(resizeHitbox.rectTransform, 728f, 468f, 32f, 32f);
+            var resize = resizeHitbox.gameObject.AddComponent<VolasUIDrag>();
+            resize.Target = window;
+            resize.IsResize = true;
+            resize.OnComplete = SavePosition;
+
+            hudText = MakeText(canvasRect, "", 10f, 8f, 320f, 102f, 12, white);
+            hudText.gameObject.SetActive(false);
+            crosshairH = MakeImage(canvasRect, "Crosshair H", white);
+            crosshairV = MakeImage(canvasRect, "Crosshair V", white);
+            Center(crosshairH.rectTransform, 18f, 2f);
+            Center(crosshairV.rectTransform, 2f, 18f);
+            root.SetActive(false);
         }
 
-        internal void Draw()
+        private void EnsureEventSystem()
         {
-            EnsureStyles();
-            UpdateOpacity();
-            DrawTelemetry();
-            if (plugin.Effects.DesktopCrosshair)
+            var events = UnityEngine.Object.FindObjectOfType<EventSystem>();
+            if (events == null)
             {
-                Fill(new Rect(Screen.width / 2f - 1, Screen.height / 2f - 9, 2, 18), White);
-                Fill(new Rect(Screen.width / 2f - 9, Screen.height / 2f - 1, 18, 2), White);
+                var host = new GameObject("Volas UI EventSystem",
+                    typeof(EventSystem), typeof(StandaloneInputModule));
+                UnityEngine.Object.DontDestroyOnLoad(host);
             }
-
-            if (!plugin.DesktopOpen) return;
-
-            if (Screen.width != lastScreenWidth || Screen.height != lastScreenHeight)
-            {
-                lastScreenWidth = Screen.width;
-                lastScreenHeight = Screen.height;
-                window.width = Mathf.Min(window.width, Mathf.Max(630, Screen.width - 18));
-                window.height = Mathf.Min(window.height, Mathf.Max(420, Screen.height - 18));
-            }
-
-            window.x = Mathf.Clamp(window.x, 0f, Mathf.Max(0f, Screen.width - 90f));
-            window.y = Mathf.Clamp(window.y, 0f, Mathf.Max(0f, Screen.height - 42f));
-            window = GUI.Window(89273, window, WindowContents, "", backgroundStyle);
-            if (Event.current.type == EventType.MouseUp) SaveWindow();
+            else if (events.GetComponent<BaseInputModule>() == null)
+                events.gameObject.AddComponent<StandaloneInputModule>();
         }
 
-        private void WindowContents(int id)
+        private void BuildSearch()
         {
-            float w = window.width;
-            float h = window.height;
-
-            // Compact top strip: no bright border, oversized logo or footer chrome.
-            Fill(new Rect(12f, 2f, w - 24f, 32f), Header);
-            DrawText(new Rect(14f, 7f, 64f, 23f), "volas", textTitle);
-            DrawText(new Rect(78f, 9f, 74f, 20f), "v1.4.0", textDim);
-
-            Rect searchRect = new Rect(w - 261f, 6f, 189f, 24f);
-            Fill(searchRect, SearchSurface);
-            GUI.SetNextControlName("VolasSearch");
-            search = GUI.TextField(new Rect(searchRect.x + 20f, 7f, searchRect.width - 24f, 22f),
-                search ?? "", searchField);
-            if (string.IsNullOrEmpty(search) && GUI.GetNameOfFocusedControl() != "VolasSearch")
+            Image fieldImage = MakeImage(window, "Search background",
+                new Color(.070f, .062f, .115f, .73f), softRounded, true);
+            Place(fieldImage.rectTransform, 545f, 7f, 140f, 24f);
+            searchBox = fieldImage.gameObject.AddComponent<InputField>();
+            searchBox.transition = Selectable.Transition.None;
+            Text fieldText = MakeText(fieldImage.rectTransform, "Input text",
+                9f, 3f, 121f, 20f, 11, white);
+            fieldText.supportRichText = false;
+            fieldText.gameObject.name = "Search input text";
+            searchBox.textComponent = fieldText;
+            Text placeholder = MakeText(fieldImage.rectTransform, "search...",
+                9f, 3f, 120f, 20f, 11, muted);
+            placeholder.gameObject.name = "Search placeholder";
+            searchBox.placeholder = placeholder;
+            searchBox.onValueChanged.AddListener(value =>
             {
-                DrawText(new Rect(searchRect.x + 7f, 8f, 15f, 20f), "⌕", textAccent);
-                DrawText(new Rect(searchRect.x + 26f, 9f, 130f, 18f), "search...", textDim);
-            }
-
-            if (GUI.Button(new Rect(w - 63f, 4f, 28f, 29f), "", noStyle))
-                Navigate("Settings");
-            DrawText(new Rect(w - 59f, 7f, 24f, 22f), "⚙", textNormal);
-            if (GUI.Button(new Rect(w - 33f, 4f, 25f, 29f), "", noStyle))
-                plugin.DesktopOpen = false;
-            DrawText(new Rect(w - 28f, 8f, 20f, 22f), "×", textDim);
-
-            Fill(new Rect(8f, 35f, w - 16f, 1f), Border);
-            DrawNavigation(new Rect(12f, 38f, w - 24f, 36f));
-            Fill(new Rect(8f, 73f, w - 16f, 1f), Border);
-
-            Rect body = new Rect(15f, 81f, w - 30f, h - 101f);
-            if (!string.IsNullOrWhiteSpace(search))
-                DrawCategoryView(body, "Search", SearchResults());
-            else if (page == "Home")
-                DrawHome(body);
-            else if (page == "Enabled")
-                DrawCategoryView(body, "Enabled", EnabledFeatures());
-            else
-                DrawCategoryView(body, page, plugin.Features.InCategory(ResolveCategory(page)));
-
-            // Keep feedback unobtrusive; the screenshot's home surface is clean.
-            if (page != "Home" || !string.IsNullOrWhiteSpace(search))
-                DrawText(new Rect(20f, h - 18f, w - 53f, 16f),
-                    ClipText(plugin.Features.LastMessage, 120), textDim);
-
-            Rect grip = new Rect(w - 26f, h - 25f, 26f, 25f);
-            Event e = Event.current;
-            if (e.type == EventType.MouseDown && e.button == 0 && grip.Contains(e.mousePosition))
-            {
-                resizing = true;
-                e.Use();
-            }
-            if (e.type == EventType.MouseDrag && resizing)
-            {
-                window.width = Mathf.Clamp(window.width + e.delta.x, 630f,
-                    Mathf.Max(630f, Screen.width - 12f));
-                window.height = Mathf.Clamp(window.height + e.delta.y, 420f,
-                    Mathf.Max(420f, Screen.height - 12f));
-                e.Use();
-            }
-            if (e.type == EventType.MouseUp) resizing = false;
-            Fill(new Rect(w - 11f, h - 9f, 7f, 1f), Border);
-            Fill(new Rect(w - 8f, h - 12f, 1f, 7f), Border);
-            GUI.DragWindow(new Rect(0f, 0f, Mathf.Max(80f, w - 275f), 35f));
+                currentQuery = value ?? "";
+                RedrawPage();
+            });
         }
 
-        private static string ResolveCategory(string displayedName)
+        private void BuildNavigation()
         {
-            switch (displayedName)
+            float x = 0f;
+            foreach (string tab in Tabs)
             {
-                case "Players": return "Telemetry";
-                case "Projectiles": return "Gun Mods";
-                case "Fun": return "Utilities";
-                case "VR Rig": return "Settings";
-                default: return displayedName;
-            }
-        }
-
-        private void DrawNavigation(Rect area)
-        {
-            // The visual ordering follows the supplied Untitled desktop reference.
-            // Empty sections stay empty until features are registered: no fake mods.
-            string[] tabs = {
-                "Settings", "Home", "Players", "VR Rig", "Movement", "Visuals",
-                "Overpowered", "Master", "Global", "Gamemode", "Fun", "Plugin",
-                "Zones", "Safety", "Projectiles", "Favorites", "Enabled", "All"
-            };
-            float totalWidth = 3f;
-            for (int i = 0; i < tabs.Length; i++)
-                totalWidth += Mathf.Max(31f, tabs[i].Length * 4.5f + 11f);
-
-            navigationScroll = GUI.BeginScrollView(area, navigationScroll,
-                new Rect(0f, 0f, Mathf.Max(totalWidth, area.width - 2f), 34f), false, false);
-            float x = 0f, targetX = 0f, targetWidth = 30f;
-            for (int i = 0; i < tabs.Length; i++)
-            {
-                string tab = tabs[i];
-                float tabWidth = Mathf.Max(31f, tab.Length * 4.5f + 11f);
-                bool active = page == tab && string.IsNullOrWhiteSpace(search);
-                if (GUI.Button(new Rect(x, 0f, tabWidth - 2f, 29f), "", noStyle))
-                    Navigate(tab);
-                DrawText(new Rect(x + 4f, 7f, tabWidth - 7f, 20f),
-                    tab.ToLowerInvariant(), active ? textTabActive : textTab);
+                string chosen = tab;
+                float width = Mathf.Max(42f, tab.Length * 6.1f + 13f);
+                bool active = tab == currentPage;
+                var btn = MakeButton(navigationContent, "Tab " + tab,
+                    tab.ToLowerInvariant(), x, 2f, width, 29f,
+                    Color.clear, () => Navigate(chosen), active ? white : muted,
+                    active ? 11 : 10, active);
+                Text label = btn.GetComponentInChildren<Text>();
+                if (label != null) label.alignment = TextAnchor.MiddleCenter;
                 if (active)
                 {
-                    targetX = x + 4f;
-                    targetWidth = tabWidth - 12f;
+                    var under = MakeImage(btn.transform as RectTransform,
+                        "Violet underline", purple);
+                    Place(under.rectTransform, 5f, 27f, width - 10f, 2f);
                 }
-                x += tabWidth;
+                x += width + 1f;
             }
-            float blend = Mathf.Clamp01(Time.unscaledDeltaTime * 18f);
-            if (underlineX < 0f)
-            {
-                underlineX = targetX;
-                underlineWidth = targetWidth;
-            }
-            underlineX = Mathf.Lerp(underlineX, targetX, blend);
-            underlineWidth = Mathf.Lerp(underlineWidth, targetWidth, blend);
-            if (string.IsNullOrWhiteSpace(search))
-                Fill(new Rect(underlineX, 32f, underlineWidth, 2f), Violet);
-            GUI.EndScrollView();
-        }
-
-        private void DrawHome(Rect area)
-        {
-            // Three flush columns with quiet, unboxed rows, as in the reference.
-            const float gap = 11f;
-            float columnWidth = (area.width - 2f * gap) / 3f;
-            float rowHeight = 43f;
-            string[][] columns = {
-                new [] { "Settings", "Players", "Visuals", "Global", "Plugin", "Projectiles" },
-                new [] { "Favorites", "VR Rig", "Overpowered", "Gamemode", "Zone Locked", "Custom Categories" },
-                new [] { "Enabled", "Movement", "Masterclient", "Fun", "Help And Safety" }
-            };
-            for (int column = 0; column < columns.Length; column++)
-            {
-                float x = area.x + column * (columnWidth + gap);
-                for (int index = 0; index < columns[column].Length; index++)
-                {
-                    float y = area.y + index * rowHeight;
-                    if (y + rowHeight > area.yMax) break;
-                    string name = columns[column][index];
-                    if (HomeRow(new Rect(x, y, columnWidth, rowHeight - 5f), name, ""))
-                    {
-                        Navigate(name);
-                    }
-                }
-            }
-        }
-
-        private void DrawCategoryView(Rect area, string category, List<Feature> features)
-        {
-            if (selectedFeature == null || !features.Contains(selectedFeature))
-                selectedFeature = features.Count > 0 ? features[0] : null;
-
-            DrawText(new Rect(area.x + 4f, area.y + 2f, area.width - 100f, 24f),
-                category, textBold);
-            DrawText(new Rect(area.xMax - 82f, area.y + 5f, 76f, 18f),
-                features.Count + " mods", textDim);
-
-            float top = area.y + 33f;
-            float gap = 11f;
-            float leftWidth = Mathf.Max(260f, area.width * 0.60f);
-            Rect list = new Rect(area.x, top, leftWidth, area.height - 36f);
-            Rect details = new Rect(list.xMax + gap, top,
-                Mathf.Max(180f, area.width - leftWidth - gap), area.height - 36f);
-            Panel(list);
-            Panel(details);
-            ColumnTitle(list, "MODS", features.Count.ToString());
-            ColumnTitle(details, "DETAILS", "VOLAS");
-
-            const float rowHeight = 55f;
-            Rect viewport = new Rect(list.x + 8f, list.y + 39f,
-                list.width - 16f, list.height - 45f);
-            featureScroll = GUI.BeginScrollView(viewport, featureScroll,
-                new Rect(0f, 0f, Mathf.Max(100f, viewport.width - 19f),
-                    Mathf.Max(viewport.height, features.Count * rowHeight + 4f)));
-            float rowWidth = Mathf.Max(170f, viewport.width - 20f);
-            for (int i = 0; i < features.Count; i++)
-            {
-                Feature feature = features[i];
-                float y = i * rowHeight;
-                Rect row = new Rect(1f, y, rowWidth - 3f, rowHeight - 2f);
-                bool hovered = row.Contains(Event.current.mousePosition + featureScroll);
-                if (selectedFeature == feature || hovered)
-                    Fill(row, selectedFeature == feature ? Surface : Hover);
-                Fill(new Rect(row.x + 6f, row.yMax - 1f, row.width - 12f, 1f), Border);
-
-                if (GUI.Button(new Rect(row.x, row.y, row.width - 79f, row.height), "", noStyle))
-                {
-                    selectedFeature = feature;
-                    plugin.Features.Activate(feature);
-                }
-                if (feature.Enabled)
-                    Fill(new Rect(row.x, row.y + 10f, 2f, row.height - 20f), Violet);
-                DrawText(new Rect(row.x + 12f, row.y + 7f, row.width - 103f, 19f),
-                    ClipText(feature.Label, 36), feature.Enabled ? textNormal : textSmall);
-                DrawText(new Rect(row.x + 12f, row.y + 29f, row.width - 105f, 19f),
-                    ClipText(feature.Description, 48), textDim);
-
-                Rect favorite = new Rect(row.xMax - 78f, row.y + 8f, 30f, 35f);
-                if (GUI.Button(favorite, "", noStyle))
-                    plugin.Features.ToggleFavorite(feature);
-                DrawText(new Rect(favorite.x + 8f, favorite.y + 6f, 22f, 21f),
-                    plugin.Features.IsFavorite(feature) ? "★" : "☆",
-                    plugin.Features.IsFavorite(feature) ? textAccent : textDim);
-
-                Rect toggle = new Rect(row.xMax - 45f, row.y + 15f, 42f, 22f);
-                Fill(toggle, feature.Enabled ? Violet : Surface);
-                if (GUI.Button(toggle, "", noStyle))
-                {
-                    selectedFeature = feature;
-                    plugin.Features.Activate(feature);
-                }
-                DrawText(new Rect(toggle.x + 5f, toggle.y + 3f, 39f, 19f),
-                    feature.ActionOnly ? "GO" : feature.Enabled ? "ON" : "OFF",
-                    feature.Enabled ? textMono : textDim);
-            }
-            GUI.EndScrollView();
-            if (features.Count == 0)
-                DrawText(new Rect(list.x + 17f, list.y + 59f, list.width - 30f, 60f),
-                    "No registered features in this section.", textDim);
-            DrawDetails(details, ResolveCategory(category));
-        }
-
-        private void DrawDetails(Rect box, string category)
-        {
-            Rect area = new Rect(box.x + 13, box.y + 43, box.width - 26, box.height - 55);
-            rightScroll = GUI.BeginScrollView(area, rightScroll,
-                new Rect(0, 0, area.width - 15, 850));
-            float w = Mathf.Max(130, area.width - 18);
-            float y = 0;
-            if (selectedFeature != null)
-            {
-                DrawText(new Rect(0, y, w, 28), selectedFeature.Label, textBold); y += 30;
-                DrawText(new Rect(0, y, w, 44), selectedFeature.Description, textSmall); y += 50;
-                DrawText(new Rect(0, y, w, 23),
-                    "STATUS  " + (selectedFeature.Enabled ? "ENABLED" : "DISABLED"), textDim); y += 30;
-                if (ClickLabel(new Rect(0, y, w, 34),
-                    selectedFeature.ActionOnly ? "RUN FEATURE" :
-                    selectedFeature.Enabled ? "DISABLE FEATURE" : "ENABLE FEATURE", true))
-                    plugin.Features.Activate(selectedFeature);
-                y += 43;
-            }
-            if (category == "Gun Mods" || category == "Settings")
-            {
-                DrawText(new Rect(0, y, w, 23), "APPEARANCE & CONTROLS", textSmall); y += 26;
-                if (category == "Gun Mods")
-                {
-                    y = SettingsSlider(y, w, "POINTER RANGE", 10f, 250f,
-                        plugin.Settings.GunDistance.Value, v => plugin.Settings.GunDistance.Value = v);
-                    y = SettingsSlider(y, w, "BEAM WIDTH", 0.002f, 0.06f,
-                        plugin.Settings.GunBeamWidth.Value, v => plugin.Settings.GunBeamWidth.Value = v);
-                    y = SettingsSlider(y, w, "RETICLE SIZE", 0.025f, 0.20f,
-                        plugin.Settings.GunReticleSize.Value, v => plugin.Settings.GunReticleSize.Value = v);
-                    y = SettingsSlider(y, w, "STAMP SIZE", 0.5f, 2.5f,
-                        plugin.Settings.GunMarkScale.Value, v => plugin.Settings.GunMarkScale.Value = v);
-                    y = SettingsSlider(y, w, "STAMP LIFETIME", 3f, 120f,
-                        plugin.Settings.GunMarkLifetime.Value, v => plugin.Settings.GunMarkLifetime.Value = v);
-                    DrawText(new Rect(0, y, w, 22), "BEAM STYLE", textDim); y += 22;
-                    y = Options(y, w, new [] { "LINE", "WAVE", "SPIRAL" },
-                        plugin.Settings.GunBeamStyle.Value, v => plugin.Settings.GunBeamStyle.Value = v);
-                    DrawText(new Rect(0, y, w, 22), "RETICLE", textDim); y += 22;
-                    y = Options(y, w, new [] { "ORB", "BOX", "RING", "GEM" },
-                        plugin.Settings.GunReticleStyle.Value, v => plugin.Settings.GunReticleStyle.Value = v);
-                    y = Toggle(y, w, "BEAM GLOW", plugin.Settings.GunGlow.Value,
-                        v => plugin.Settings.GunGlow.Value = v);
-                    y = Toggle(y, w, "PULSE", plugin.Settings.GunPulse.Value,
-                        v => plugin.Settings.GunPulse.Value = v);
-                    y = Toggle(y, w, "RAINBOW GUN", plugin.Settings.GunRainbow.Value,
-                        v => plugin.Settings.GunRainbow.Value = v);
-                    y = Toggle(y, w, "LEFT HAND", plugin.Settings.GunLeftHand.Value,
-                        v => plugin.Settings.GunLeftHand.Value = v);
-                    y = Toggle(y, w, "FORWARD AIM", plugin.Settings.GunUseForward.Value,
-                        v => plugin.Settings.GunUseForward.Value = v);
-                }
-                else
-                {
-                    y = SettingsSlider(y, w, "PANEL OPACITY", 0.72f, 1f,
-                        plugin.Settings.DesktopOpacity.Value, v => plugin.Settings.DesktopOpacity.Value = v);
-                    y = SettingsSlider(y, w, "VR SIZE", 0.65f, 1.3f,
-                        plugin.Settings.VrScale.Value, v => plugin.Settings.VrScale.Value = v);
-                    y = SettingsSlider(y, w, "WRIST LEFT/RIGHT", -0.24f, 0.24f,
-                        plugin.Settings.VrOffsetX.Value, v => plugin.Settings.VrOffsetX.Value = v);
-                    y = SettingsSlider(y, w, "WRIST UP/DOWN", -0.24f, 0.24f,
-                        plugin.Settings.VrOffsetY.Value, v => plugin.Settings.VrOffsetY.Value = v);
-                    y = SettingsSlider(y, w, "WRIST FORWARD", 0.02f, 0.42f,
-                        plugin.Settings.VrOffsetZ.Value, v => plugin.Settings.VrOffsetZ.Value = v);
-                    y = Toggle(y, w, "COMPACT VR", plugin.Compact, v => plugin.Compact = v);
-                    y = Toggle(y, w, "RAINBOW EFFECTS", plugin.RainbowTheme,
-                        v => plugin.RainbowTheme = v);
-                }
-            }
-            GUI.EndScrollView();
-        }
-
-        private float Options(float y, float w, string[] values, int selected, Action<int> onChange)
-        {
-            float segment = w / values.Length;
-            for (int i = 0; i < values.Length; i++)
-            {
-                int item = i;
-                Rect rect = new Rect(segment * i + 1f, y, segment - 3, 29);
-                Fill(rect, selected == item ? Violet : Surface);
-                if (GUI.Button(rect, "", noStyle)) onChange(item);
-                DrawText(new Rect(rect.x + 4, y + 4, rect.width - 8, 22), values[i],
-                    selected == item ? textMono : textSmall);
-            }
-            return y + 39;
-        }
-
-        private float SettingsSlider(float y, float w, string name, float min, float max,
-            float current, Action<float> onChange)
-        {
-            DrawText(new Rect(0, y, w, 24), name + "   " + current.ToString("0.00"), textDim);
-            float v = GUI.HorizontalSlider(new Rect(4, y + 30, w - 12, 17), current, min, max);
-            if (Mathf.Abs(v - current) > (max - min) * 0.001f) onChange(v);
-            return y + 62;
-        }
-
-        private float Toggle(float y, float w, string label, bool value, Action<bool> onChange)
-        {
-            Rect rect = new Rect(0, y, w, 31);
-            Fill(rect, Surface);
-            if (GUI.Button(rect, "", noStyle)) onChange(!value);
-            DrawText(new Rect(8, y + 4, w - 67, 22), label, textSmall);
-            Fill(new Rect(w - 43, y + 7, 34, 17), value ? Violet : Hover);
-            DrawText(new Rect(w - 40, y + 5, 35, 22), value ? "ON" : "OFF",
-                value ? textMono : textSmall);
-            return y + 38;
-        }
-
-        private List<Feature> SearchResults()
-        {
-            string term = search.Trim();
-            return plugin.Features.All.FindAll(f =>
-                f.Label.IndexOf(term, StringComparison.OrdinalIgnoreCase) >= 0 ||
-                f.Id.IndexOf(term, StringComparison.OrdinalIgnoreCase) >= 0 ||
-                f.Category.IndexOf(term, StringComparison.OrdinalIgnoreCase) >= 0 ||
-                f.Description.IndexOf(term, StringComparison.OrdinalIgnoreCase) >= 0);
-        }
-
-        private List<Feature> EnabledFeatures()
-        {
-            return plugin.Features.All.FindAll(f => f.Enabled);
+            navigationContent.sizeDelta = new Vector2(x, 32f);
         }
 
         private void Navigate(string name)
         {
-            page = name;
-            search = "";
-            featureScroll = Vector2.zero;
-            rightScroll = Vector2.zero;
-            selectedFeature = null;
+            currentPage = name;
+            currentQuery = "";
+            if (searchBox != null && searchBox.text.Length > 0)
+                searchBox.SetTextWithoutNotify("");
+            selected = null;
+            BuildNavigationFresh();
+            RedrawPage();
         }
 
-        private void Panel(Rect area)
+        private void BuildNavigationFresh()
         {
-            Fill(area, Surface);
-            Fill(new Rect(area.x, area.y, area.width, 1f), Border);
+            DestroyChildren(navigationContent);
+            BuildNavigation();
         }
 
-        private void ColumnTitle(Rect area, string title, string number)
+        internal void Tick()
         {
-            DrawText(new Rect(area.x + 12f, area.y + 10f, area.width - 89f, 20f),
-                title.ToLowerInvariant(), textDim);
-            DrawText(new Rect(area.xMax - 52f, area.y + 10f, 42f, 19f),
-                number.ToLowerInvariant(), textDim);
-            Fill(new Rect(area.x + 11f, area.y + 34f, area.width - 22f, 1f), Border);
-        }
-
-        private bool HomeRow(Rect rect, string label, string status)
-        {
-            bool hover = rect.Contains(Event.current.mousePosition);
-            if (hover) Fill(rect, Hover);
-            Fill(new Rect(rect.x + 3f, rect.yMax - 1f, rect.width - 6f, 1f), Border);
-            bool clicked = GUI.Button(rect, "", noStyle);
-            DrawText(new Rect(rect.x + 4f, rect.y + 9f, rect.width - 13f, 24f),
-                label, hover ? textNormal : textSmall);
-            return clicked;
-        }
-
-        private bool Button(Rect rect, string label, bool subtle)
-        {
-            Fill(rect, subtle ? Surface : White);
-            bool click = GUI.Button(rect, "", noStyle);
-            DrawText(new Rect(rect.x + 3, rect.y + 2, rect.width - 5, rect.height - 2), label, textSmall);
-            return click;
-        }
-
-        private bool ClickLabel(Rect rect, string label, bool solid)
-        {
-            Fill(rect, solid ? Violet : Surface);
-            bool clicked = GUI.Button(rect, "", noStyle);
-            DrawText(new Rect(rect.x + 12, rect.y + 7, rect.width - 24, 22),
-                label, solid ? textMono : textSmall);
-            return clicked;
-        }
-
-        private static string ClipText(string value, int max)
-        {
-            if (string.IsNullOrEmpty(value)) return "";
-            return value.Length > max ? value.Substring(0, Mathf.Max(2, max - 3)) + "..." : value;
-        }
-
-        private void DrawTelemetry()
-        {
-            var lines = new List<string>();
-            if (plugin.Effects.FpsHud) lines.Add("FPS  " + plugin.FramesPerSecond.ToString("0"));
-            if (plugin.Effects.ClockHud) lines.Add("TIME " + DateTime.Now.ToString("HH:mm:ss"));
-            if (plugin.Effects.PositionHud)
+            if (root == null) return;
+            bool open = plugin.DesktopOpen;
+            if (open != visible)
             {
-                var pos = plugin.Game.Position;
-                lines.Add("XYZ " + pos.x.ToString("0.0") + " " + pos.y.ToString("0.0") + " " + pos.z.ToString("0.0"));
-            }
-            if (plugin.Effects.HeadingHud) lines.Add("YAW " + plugin.Game.Heading.ToString("0"));
-            if (lines.Count == 0) return;
-            Rect card = new Rect(Mathf.Max(0, Screen.width - 239), 12, 226, lines.Count * 22 + 14);
-            Fill(card, Ink);
-            for (int i = 0; i < lines.Count; i++)
-                DrawText(new Rect(card.x + 9, card.y + 6 + i * 22, card.width - 16, 20),
-                    lines[i], textSmall);
-        }
-
-        private void EnsureStyles()
-        {
-            if (whitePixel != null) return;
-            whitePixel = Pixel(Color.white);
-            windowTexture = RoundedPanelTexture(plugin.Settings.DesktopOpacity.Value);
-            backgroundStyle = new GUIStyle(GUI.skin.window);
-            backgroundStyle.normal.background = windowTexture;
-            backgroundStyle.border = new RectOffset(15, 15, 15, 15);
-            backgroundStyle.margin = new RectOffset(0, 0, 0, 0);
-            backgroundStyle.padding = new RectOffset(0, 0, 0, 0);
-            textSmall = NewText(11, Soft);
-            textDim = NewText(10, Muted);
-            textNormal = NewText(11, White);
-            textBold = NewText(13, White, true);
-            textTitle = NewText(14, Violet, true);
-            textAccent = NewText(12, Violet, true);
-            textTab = NewText(9, Muted);
-            textTabActive = NewText(10, White, true);
-            textMono = NewText(10, White, true);
-            noStyle = new GUIStyle(GUIStyle.none);
-            searchField = new GUIStyle(GUI.skin.textField);
-            searchField.fontSize = 11;
-            searchField.alignment = TextAnchor.MiddleLeft;
-            searchField.normal.textColor = Soft;
-            searchField.focused.textColor = White;
-            searchField.normal.background = Pixel(new Color(0f, 0f, 0f, 0f));
-            searchField.focused.background = searchField.normal.background;
-            searchField.border = new RectOffset(0, 0, 0, 0);
-            searchField.padding = new RectOffset(2, 2, 2, 2);
-        }
-
-        private static GUIStyle NewText(int size, Color color, bool bold = false)
-        {
-            var style = new GUIStyle(GUI.skin.label);
-            style.fontSize = size;
-            style.fontStyle = bold ? FontStyle.Bold : FontStyle.Normal;
-            style.normal.textColor = color;
-            style.clipping = TextClipping.Clip;
-            style.wordWrap = false;
-            return style;
-        }
-
-        private static Texture2D RoundedPanelTexture(float opacity)
-        {
-            const int size = 48;
-            const float radius = 13f;
-            var texture = new Texture2D(size, size, TextureFormat.RGBA32, false);
-            texture.filterMode = FilterMode.Bilinear;
-            texture.wrapMode = TextureWrapMode.Clamp;
-            float half = (size - 1f) * 0.5f;
-            float inner = half - radius;
-            for (int y = 0; y < size; y++)
-            {
-                for (int x = 0; x < size; x++)
+                visible = open;
+                if (open)
                 {
-                    float dx = Mathf.Max(0f, Mathf.Abs(x - half) - inner);
-                    float dy = Mathf.Max(0f, Mathf.Abs(y - half) - inner);
-                    float edge = Mathf.Clamp01(radius + 0.5f -
-                        Mathf.Sqrt(dx * dx + dy * dy));
-                    texture.SetPixel(x, y,
-                        new Color(Ink.r, Ink.g, Ink.b, opacity * edge));
+                    savedCursorVisible = Cursor.visible;
+                    savedLockMode = Cursor.lockState;
+                    Cursor.lockState = CursorLockMode.None;
+                    Cursor.visible = true;
+                    root.SetActive(true);
+                    RedrawPage();
+                }
+                else
+                {
+                    // Only restore the cursor state we captured on opening.
+                    root.SetActive(false);
+                    Cursor.lockState = savedLockMode;
+                    Cursor.visible = savedCursorVisible;
                 }
             }
-            texture.Apply();
-            return texture;
+            if (open && plugin.Features.Revision != drawnRevision)
+                RedrawPage();
+
+            if (Time.unscaledTime >= lastHUDUpdate + .24f)
+            {
+                lastHUDUpdate = Time.unscaledTime;
+                UpdateHUD();
+            }
+            if (open && Time.unscaledTime >= lastStatusUpdate + .4f)
+            {
+                lastStatusUpdate = Time.unscaledTime;
+                statusText.text = plugin.Features.LastMessage;
+                if (currentPage == "Home") statusText.text = "";
+            }
         }
 
-        private static Texture2D Pixel(Color color)
+        private void UpdateHUD()
         {
-            var texture = new Texture2D(1, 1, TextureFormat.RGBA32, false);
-            texture.SetPixel(0, 0, color);
-            texture.Apply();
-            return texture;
+            var messages = new List<string>();
+            if (plugin.Effects.FpsHud)
+                messages.Add("FPS  " + plugin.FramesPerSecond.ToString("0"));
+            if (plugin.Effects.ClockHud)
+                messages.Add("TIME " + DateTime.Now.ToString("HH:mm:ss"));
+            if (plugin.Effects.PositionHud)
+            {
+                Vector3 p = plugin.Game.Position;
+                messages.Add("XYZ " + p.x.ToString("0.0") + " " + p.y.ToString("0.0") +
+                    " " + p.z.ToString("0.0"));
+            }
+            if (plugin.Effects.HeadingHud)
+                messages.Add("YAW  " + plugin.Game.Heading.ToString("0"));
+            hudText.gameObject.SetActive(messages.Count != 0);
+            if (messages.Count > 0) hudText.text = string.Join("\n", messages.ToArray());
+            crosshairH.gameObject.SetActive(plugin.Effects.DesktopCrosshair);
+            crosshairV.gameObject.SetActive(plugin.Effects.DesktopCrosshair);
+            // HUD remains visible even when the menu is closed.
+            if (!visible) root.SetActive(messages.Count != 0 || plugin.Effects.DesktopCrosshair);
         }
 
-        private void Fill(Rect rect, Color color)
+        private void RedrawPage()
         {
-            Color before = GUI.color;
-            GUI.color = color;
-            GUI.DrawTexture(rect, whitePixel);
-            GUI.color = before;
+            if (pageRoot == null) return;
+            drawnRevision = plugin.Features.Revision;
+            drawnPage = currentPage;
+            DestroyChildren(pageRoot);
+            if (string.IsNullOrEmpty(currentQuery) && currentPage == "Home")
+                DrawHome();
+            else
+                DrawFeaturePage();
         }
 
-        private static void DrawText(Rect rect, string value, GUIStyle style)
+        private void DrawHome()
         {
-            GUI.Label(rect, value ?? "", style);
+            string[][] cols =
+            {
+                new [] { "Settings", "Players", "Visuals", "Global", "Plugin", "Projectiles" },
+                new [] { "Favorites", "VR Rig", "Overpowered", "Gamemode", "Zone Locked", "Custom Categories" },
+                new [] { "Enabled", "Movement", "Masterclient", "Fun", "Help And Safety" }
+            };
+            for (int col = 0; col < 3; col++)
+            {
+                float x = col * 247f;
+                for (int i = 0; i < cols[col].Length; i++)
+                {
+                    string label = cols[col][i];
+                    float y = 1f + 43f * i;
+                    Image highlight = MakeImage(pageRoot, "Category " + label, Color.clear);
+                    Place(highlight.rectTransform, x, y, 237f, 38f);
+                    Button button = highlight.gameObject.AddComponent<Button>();
+                    button.transition = Selectable.Transition.ColorTint;
+                    ColorBlock colors = button.colors;
+                    colors.normalColor = Color.white;
+                    colors.highlightedColor = new Color(.65f, .54f, 1f, 1f);
+                    colors.pressedColor = new Color(.49f, .38f, .77f, 1f);
+                    button.colors = colors;
+                    string destination = label == "Masterclient" ? "Master" :
+                        label == "Help And Safety" ? "Safety" :
+                        label == "Zone Locked" ? "Zones" :
+                        label == "Custom Categories" ? "All" : label;
+                    button.onClick.AddListener(() => Navigate(destination));
+                    MakeText(highlight.rectTransform, label, 7f, 8f, 223f, 22f,
+                        12, new Color(.53f, .52f, .61f, 1f), true);
+                    var line = MakeImage(pageRoot, "Row divider", borderColor);
+                    Place(line.rectTransform, x + 2f, y + 38f, 232f, 1f);
+                }
+            }
         }
 
-        private void UpdateOpacity()
+        private void DrawFeaturePage()
         {
-            float value = plugin.Settings.DesktopOpacity.Value;
-            if (Mathf.Abs(value - lastAppliedOpacity) < 0.004f) return;
-            lastAppliedOpacity = value;
-            Texture2D oldTexture = windowTexture;
-            windowTexture = RoundedPanelTexture(value);
-            backgroundStyle.normal.background = windowTexture;
-            if (oldTexture != null) UnityEngine.Object.Destroy(oldTexture);
+            string pageName = string.IsNullOrWhiteSpace(currentQuery)
+                ? currentPage : "Search results";
+            var matches = GetVisibleFeatures();
+            MakeText(pageRoot, pageName, 4f, 0f, 410f, 27f, 14, white, true);
+            MakeText(pageRoot, matches.Count + " available", 607f, 7f, 115f, 20f,
+                10, muted);
+
+            Image leftPanel = MakeImage(pageRoot, "Mods list", panelColor, softRounded, true);
+            Place(leftPanel.rectTransform, 0f, 34f, 459f, 340f);
+            Image rightPanel = MakeImage(pageRoot, "Feature details", panelColor, softRounded, true);
+            Place(rightPanel.rectTransform, 470f, 34f, 260f, 340f);
+
+            MakeText(leftPanel.rectTransform, "mods", 12f, 8f, 200f, 20f, 10, muted);
+            MakeText(rightPanel.rectTransform, "details", 12f, 8f, 190f, 20f, 10, muted);
+
+            RectTransform viewport = MakeRect(leftPanel.rectTransform, "Feature scroll viewport");
+            Place(viewport, 7f, 35f, 445f, 298f);
+            viewport.gameObject.AddComponent<RectMask2D>();
+            ScrollRect scroller = viewport.gameObject.AddComponent<ScrollRect>();
+            scroller.vertical = true;
+            scroller.horizontal = false;
+            scroller.movementType = ScrollRect.MovementType.Clamped;
+            scroller.scrollSensitivity = 20f;
+            RectTransform list = MakeRect(viewport, "Features");
+            AnchorTopLeft(list);
+            list.sizeDelta = new Vector2(440f, Mathf.Max(298f, matches.Count * 57f));
+            scroller.viewport = viewport;
+            scroller.content = list;
+
+            if (selected == null || !matches.Contains(selected))
+                selected = matches.Count > 0 ? matches[0] : null;
+            for (int i = 0; i < matches.Count; i++)
+            {
+                Feature mod = matches[i];
+                float y = i * 57f;
+                var row = MakeImage(list, "Mod " + mod.Id,
+                    selected == mod ? hoverColor : new Color(.055f, .052f, .078f, .33f),
+                    softRounded, true);
+                Place(row.rectTransform, 2f, y + 1f, 431f, 53f);
+                Button choose = row.gameObject.AddComponent<Button>();
+                choose.transition = Selectable.Transition.None;
+                choose.onClick.AddListener(() =>
+                {
+                    selected = mod;
+                    RedrawPage();
+                });
+                if (mod.Enabled)
+                {
+                    Image activeMark = MakeImage(row.rectTransform, "Active", purple);
+                    Place(activeMark.rectTransform, 0f, 9f, 2f, 34f);
+                }
+                MakeText(row.rectTransform, mod.Label, 12f, 5f, 272f, 20f,
+                    11, white, true);
+                MakeText(row.rectTransform, Truncate(mod.Description, 65),
+                    12f, 27f, 295f, 20f, 10, muted);
+                var fav = MakeButton(row.rectTransform, "Favorite",
+                    plugin.Features.IsFavorite(mod) ? "★" : "☆",
+                    316f, 9f, 31f, 31f, Color.clear, () =>
+                    {
+                        plugin.Features.ToggleFavorite(mod);
+                        RedrawPage();
+                    }, plugin.Features.IsFavorite(mod) ? purple : muted, 17);
+                MakeButton(row.rectTransform, "Toggle " + mod.Id,
+                    mod.ActionOnly ? "RUN" : mod.Enabled ? "ON" : "OFF",
+                    353f, 13f, 63f, 28f,
+                    mod.Enabled ? purple : new Color(.11f, .10f, .16f, 1f),
+                    () =>
+                    {
+                        plugin.Features.Activate(mod);
+                        selected = mod;
+                        RedrawPage();
+                    }, white, 10, true);
+            }
+            if (matches.Count == 0)
+                MakeText(leftPanel.rectTransform, "No working mods registered in this category.",
+                    17f, 70f, 410f, 50f, 12, muted);
+            DrawDetails(rightPanel.rectTransform);
         }
 
-        private void SaveWindow()
+        private void DrawDetails(RectTransform container)
         {
-            if (Mathf.Abs(plugin.Settings.WindowX.Value - window.x) > 1f)
-                plugin.Settings.WindowX.Value = window.x;
-            if (Mathf.Abs(plugin.Settings.WindowY.Value - window.y) > 1f)
-                plugin.Settings.WindowY.Value = window.y;
-            if (Mathf.Abs(plugin.Settings.WindowWidth.Value - window.width) > 1f)
-                plugin.Settings.WindowWidth.Value = window.width;
-            if (Mathf.Abs(plugin.Settings.WindowHeight.Value - window.height) > 1f)
-                plugin.Settings.WindowHeight.Value = window.height;
+            if (selected == null)
+            {
+                MakeText(container, "Choose a category with available features.",
+                    14f, 55f, 230f, 90f, 12, muted);
+            }
+            else
+            {
+                MakeText(container, selected.Label, 14f, 43f, 230f, 48f,
+                    14, white, true);
+                Text description = MakeText(container, selected.Description,
+                    14f, 92f, 231f, 105f, 11, muted);
+                description.horizontalOverflow = HorizontalWrapMode.Wrap;
+                description.verticalOverflow = VerticalWrapMode.Truncate;
+                MakeText(container, selected.ActionOnly ? "INSTANT ACTION" :
+                        selected.Enabled ? "ENABLED" : "DISABLED",
+                    14f, 210f, 216f, 22f, 11,
+                    selected.Enabled ? purple : muted, true);
+                MakeButton(container, "Action",
+                    selected.ActionOnly ? "RUN FEATURE" :
+                    selected.Enabled ? "DISABLE" : "ENABLE",
+                    13f, 250f, 234f, 36f,
+                    purple, () =>
+                    {
+                        plugin.Features.Activate(selected);
+                        RedrawPage();
+                    }, white, 12, true);
+            }
+
+            if (currentPage == "Settings")
+            {
+                MakeButton(container, "Disable all", "PANIC / DISABLE ALL",
+                    13f, 294f, 234f, 32f,
+                    new Color(.17f, .10f, .22f, 1f),
+                    () =>
+                    {
+                        plugin.Features.DisableAll();
+                        RedrawPage();
+                    }, white, 10, true);
+            }
+        }
+
+        private List<Feature> GetVisibleFeatures()
+        {
+            var all = plugin.Features.All;
+            if (!string.IsNullOrWhiteSpace(currentQuery))
+            {
+                string s = currentQuery.Trim();
+                return all.FindAll(f =>
+                    f.Label.IndexOf(s, StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    f.Id.IndexOf(s, StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    f.Category.IndexOf(s, StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    f.Description.IndexOf(s, StringComparison.OrdinalIgnoreCase) >= 0);
+            }
+            switch (currentPage)
+            {
+                case "All": return new List<Feature>(all);
+                case "Favorites": return plugin.Features.InCategory("Favorites");
+                case "Enabled": return all.FindAll(f => f.Enabled);
+                case "Players": return plugin.Features.InCategory("Telemetry");
+                case "Projectiles": return plugin.Features.InCategory("Gun Mods");
+                case "Fun": return plugin.Features.InCategory("Fun");
+                case "VR Rig": return plugin.Features.InCategory("VR Rig");
+                case "Master": return plugin.Features.InCategory("Master");
+                case "Safety": return plugin.Features.InCategory("Safety");
+                case "Plugin": return plugin.Features.InCategory("Settings");
+                default: return plugin.Features.InCategory(currentPage);
+            }
+        }
+
+        private void SavePosition()
+        {
+            Vector2 position = window.anchoredPosition;
+            plugin.Settings.WindowX.Value = position.x;
+            plugin.Settings.WindowY.Value = -position.y;
+            plugin.Settings.WindowWidth.Value = window.sizeDelta.x;
+            plugin.Settings.WindowHeight.Value = window.sizeDelta.y;
         }
 
         internal void Dispose()
         {
-            if (whitePixel != null) UnityEngine.Object.Destroy(whitePixel);
-            if (windowTexture != null) UnityEngine.Object.Destroy(windowTexture);
-            if (searchField != null && searchField.normal.background != null &&
-                searchField.normal.background != whitePixel)
-                UnityEngine.Object.Destroy(searchField.normal.background);
-            whitePixel = null;
-            windowTexture = null;
+            if (visible)
+            {
+                Cursor.lockState = savedLockMode;
+                Cursor.visible = savedCursorVisible;
+            }
+            if (root != null) UnityEngine.Object.Destroy(root);
+            if (rounded != null)
+            {
+                var texture = rounded.texture;
+                UnityEngine.Object.Destroy(rounded);
+                if (texture != null) UnityEngine.Object.Destroy(texture);
+            }
+            if (softRounded != null)
+            {
+                var texture = softRounded.texture;
+                UnityEngine.Object.Destroy(softRounded);
+                if (texture != null) UnityEngine.Object.Destroy(texture);
+            }
+        }
+
+        private static string Truncate(string s, int length)
+        {
+            if (string.IsNullOrEmpty(s)) return "";
+            return s.Length > length ? s.Substring(0, length - 3) + "..." : s;
+        }
+
+        private static void DestroyChildren(Transform transform)
+        {
+            for (int i = transform.childCount - 1; i >= 0; i--)
+            {
+                Transform child = transform.GetChild(i);
+                child.SetParent(null, false);
+                UnityEngine.Object.Destroy(child.gameObject);
+            }
+        }
+
+        private static RectTransform MakeRect(Transform parent, string name)
+        {
+            var obj = new GameObject(name, typeof(RectTransform));
+            RectTransform rt = obj.GetComponent<RectTransform>();
+            rt.SetParent(parent, false);
+            AnchorTopLeft(rt);
+            return rt;
+        }
+
+        private static void AnchorTopLeft(RectTransform rt)
+        {
+            rt.anchorMin = new Vector2(0f, 1f);
+            rt.anchorMax = new Vector2(0f, 1f);
+            rt.pivot = new Vector2(0f, 1f);
+            rt.localScale = Vector3.one;
+        }
+
+        private static void Place(RectTransform rt, float x, float y, float w, float h)
+        {
+            AnchorTopLeft(rt);
+            rt.anchoredPosition = new Vector2(x, -y);
+            rt.sizeDelta = new Vector2(w, h);
+        }
+
+        private static void Stretch(RectTransform rt)
+        {
+            rt.anchorMin = Vector2.zero;
+            rt.anchorMax = Vector2.one;
+            rt.offsetMin = Vector2.zero;
+            rt.offsetMax = Vector2.zero;
+        }
+
+        private static void StretchInset(RectTransform rt, float inset)
+        {
+            Stretch(rt);
+            rt.offsetMin = new Vector2(inset, inset);
+            rt.offsetMax = new Vector2(-inset, -inset);
+        }
+
+        private static void Center(RectTransform rt, float w, float h)
+        {
+            rt.anchorMin = new Vector2(.5f, .5f);
+            rt.anchorMax = rt.anchorMin;
+            rt.pivot = new Vector2(.5f, .5f);
+            rt.anchoredPosition = Vector2.zero;
+            rt.sizeDelta = new Vector2(w, h);
+        }
+
+        private static Image MakeImage(Transform parent, string name, Color color,
+            Sprite sprite = null, bool sliced = false)
+        {
+            RectTransform rect = MakeRect(parent, name);
+            Image image = rect.gameObject.AddComponent<Image>();
+            image.color = color;
+            image.sprite = sprite;
+            image.type = sprite != null && sliced ? Image.Type.Sliced : Image.Type.Simple;
+            image.raycastTarget = false;
+            return image;
+        }
+
+        private Text MakeText(Transform parent, string value,
+            float x, float y, float w, float h,
+            int fontSize, Color color, bool bold = false)
+        {
+            var rect = MakeRect(parent, "Text " + value);
+            Place(rect, x, y, w, h);
+            Text text = rect.gameObject.AddComponent<Text>();
+            text.font = font;
+            text.fontSize = fontSize;
+            text.fontStyle = bold ? FontStyle.Bold : FontStyle.Normal;
+            text.color = color;
+            text.alignment = TextAnchor.MiddleLeft;
+            text.horizontalOverflow = HorizontalWrapMode.Overflow;
+            text.verticalOverflow = VerticalWrapMode.Truncate;
+            text.raycastTarget = false;
+            text.text = value;
+            return text;
+        }
+
+        private Button MakeButton(Transform parent, string name, string title,
+            float x, float y, float w, float h, Color background,
+            Action callback, Color? textColor = null, int size = 11, bool bold = false)
+        {
+            var image = MakeImage(parent, name, background, softRounded, true);
+            Place(image.rectTransform, x, y, w, h);
+            image.raycastTarget = true;
+            Button button = image.gameObject.AddComponent<Button>();
+            button.transition = Selectable.Transition.None;
+            if (callback != null) button.onClick.AddListener(() => callback());
+            if (!string.IsNullOrEmpty(title))
+            {
+                var t = MakeText(image.rectTransform, title, 0f, 0f,
+                    w, h, size, textColor ?? white, bold);
+                t.alignment = TextAnchor.MiddleCenter;
+            }
+            return button;
+        }
+
+        private static Sprite MakeRoundSprite(int size, float radius)
+        {
+            var t = new Texture2D(size, size, TextureFormat.RGBA32, false);
+            t.wrapMode = TextureWrapMode.Clamp;
+            t.filterMode = FilterMode.Bilinear;
+            float half = (size - 1f) / 2f;
+            float inside = half - radius;
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    float dx = Mathf.Max(0f, Mathf.Abs(x - half) - inside);
+                    float dy = Mathf.Max(0f, Mathf.Abs(y - half) - inside);
+                    float alpha = Mathf.Clamp01(radius + .5f -
+                        Mathf.Sqrt(dx * dx + dy * dy));
+                    t.SetPixel(x, y, new Color(1f, 1f, 1f, alpha));
+                }
+            }
+            t.Apply();
+            float border = Mathf.Ceil(radius + 2f);
+            return Sprite.Create(t, new Rect(0, 0, size, size),
+                new Vector2(.5f, .5f), 100f, 0, SpriteMeshType.FullRect,
+                new Vector4(border, border, border, border));
+        }
+    }
+
+    // Handles moving/resizing without intercepting unrelated feature buttons.
+    internal sealed class VolasUIDrag : MonoBehaviour,
+        IBeginDragHandler, IDragHandler, IEndDragHandler
+    {
+        internal RectTransform Target;
+        internal bool IsResize;
+        internal Action OnComplete;
+        private Vector2 start;
+        private Vector2 originalPosition;
+        private Vector2 originalSize;
+
+        public void OnBeginDrag(PointerEventData e)
+        {
+            if (Target == null) return;
+            start = e.position;
+            originalPosition = Target.anchoredPosition;
+            originalSize = Target.sizeDelta;
+        }
+
+        public void OnDrag(PointerEventData e)
+        {
+            if (Target == null) return;
+            float scale = Target.GetComponentInParent<Canvas>().scaleFactor;
+            if (scale < .01f) scale = 1f;
+            Vector2 delta = (e.position - start) / scale;
+            if (IsResize)
+            {
+                Target.sizeDelta = new Vector2(
+                    Mathf.Clamp(originalSize.x + delta.x, 630f, 1500f),
+                    Mathf.Clamp(originalSize.y - delta.y, 420f, 1100f));
+            }
+            else
+            {
+                Target.anchoredPosition = originalPosition + delta;
+            }
+        }
+
+        public void OnEndDrag(PointerEventData e)
+        {
+            if (OnComplete != null) OnComplete();
         }
     }
 }
