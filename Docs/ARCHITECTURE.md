@@ -1,4 +1,4 @@
-# Volas v1.3 architecture
+# Volas v1.4 architecture
 
 The plugin is packaged into **one Volas.dll**. Source files stay in separate folders so the project remains maintainable:
 
@@ -10,8 +10,8 @@ The plugin is packaged into **one Volas.dll**. Source files stay in separate fol
 - `Features/Telemetry/`, `Features/Utilities/`, `Features/Settings/`: independent catalog sections.
 - `Game/`: game type and Photon room bridge with throttled type discovery.
 - `Settings/`: persistent BepInEx configuration entries with bounded values.
-- `UI/Desktop/`: searchable OLED panel, appearance presets and display settings.
-- `UI/VR/`: touch-driven paged hand menu.
+- `UI/Desktop/`: reference-inspired three-column black-and-white dashboard, animated tab underline, instant search, details, favorites, enabled list and opacity settings.
+- `UI/VR/`: physical wrist-anchored tablet with real 3D buttons, category launcher, paging, nearby controller trigger/touch and reusable materials.
 - `src/Diagnostics/`: runtime assembly identification (compiled as part of the same DLL).
 - `Build/`: Windows build helper with automatic game discovery and target framework fallback.
 

@@ -1,8 +1,18 @@
-# Volas v1.3 — Gorilla Tag PCVR mod menu
+# Volas v1.4 — Gorilla Tag PCVR mod menu
 
-Volas is a modular C# / BepInEx 5 Mono mod menu with a dark OLED desktop UI and in-world VR menu. **Every source folder compiles into a single Volas.dll** — including `GunLib/` and `src/`.
+Volas is a modular C# / BepInEx 5 Mono mod menu with a monochrome desktop dashboard and a physical in-world VR wrist menu. **Every source folder compiles into a single Volas.dll** — including `GunLib/` and `src/`.
 
 **Build status:** Source uploaded and statically reviewed; the DLL has **not** been compiled against your specific game or verified in-game here. Game DLLs and BepInEx are not included in the repository.
+
+## Interface — inspired by the supplied screenshots
+
+The desktop menu is a broad semi-transparent charcoal/black panel with bright-white emphasis, a compact **volas** header, horizontal category tabs with a smooth underline, live search, and a **three-column Home page** (categories / favorites / enabled mods). It deliberately uses the reference layout, but not copied Untitled artwork or branding.
+
+**F6** opens/closes the PC menu. The header has search, a Settings shortcut, and a close button. Clicking any category opens a scrollable mod list with status, favorites, and a details panel. The Gun Mods details panel includes pointer controls; Settings includes panel opacity and VR wrist offsets. Resize using the bottom-right corner, drag using the header. Window coordinates, size and appearance are remembered through BepInEx config.
+
+The VR menu is a physical, framed black-and-white tablet positioned from the **left controller/wrist**. **Left Y** toggles it. The tablet starts on a **category launcher** similar to the supplied handheld-menu reference; tap a category with the opposite hand to enter, tap a mod to toggle it, use **PREV/NEXT** for pages, **HOME** to go back, and **X** to close. Controller trigger can also select a nearby pointed button. The VR size and X/Y/Z anchor offsets are configurable in Desktop → Settings.
+
+**Appearance note:** Unity IMGUI cannot reproduce the screenshot's real background blur or animated UI shader effects without a custom UI/rendering layer. This version implements a dark translucent interface instead. It is a new Volas design, not a pixel-perfect copy.
 
 ## Build the entire project in Windows
 
