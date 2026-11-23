@@ -20,6 +20,8 @@ namespace Volas
         private readonly List<PhysicalButton> buttons = new List<PhysicalButton>();
         private readonly List<string> categories = new List<string>();
         private readonly List<InputDevice> rightControllerCandidates = new List<InputDevice>(4);
+        private readonly List<Mesh> frameMeshes = new List<Mesh>();
+        private readonly List<Mesh> buttonMeshes = new List<Mesh>();
         private float nextMissingCameraLog;
         internal string Status { get; private set; } = "VR menu ready";
         private GameObject root;
@@ -287,16 +289,16 @@ namespace Volas
             // Solid physical back with an OLED front, raised navigation and buttons.
             Cube(root.transform, "Grip mount", 0f, -0.083f, -0.035f,
                 0.135f, 0.29f, 0.046f, body);
-            Cube(root.transform, "Backplate", 0f, 0f, -0.016f,
-                0.508f, 0.806f, 0.039f, body);
-            Cube(root.transform, "Accent edge", 0f, 0f, 0.003f,
-                0.498f, 0.795f, 0.008f, accent);
-            Cube(root.transform, "OLED inset", 0f, 0f, 0.011f,
-                0.487f, 0.780f, 0.008f, deepBlack);
-            Cube(root.transform, "Header band", 0f, 0.343f, 0.023f,
-                0.474f, 0.074f, 0.008f, body);
-            Cube(root.transform, "Footer band", 0f, -0.345f, 0.024f,
-                0.473f, 0.088f, 0.008f, body);
+            RoundedPlate(root.transform, "Backplate", 0f, 0f, -0.016f,
+                .508f, .806f, .039f, .031f, body, false);
+            RoundedPlate(root.transform, "Accent edge", 0f, 0f, .003f,
+                .498f, .795f, .008f, .027f, accent, false);
+            RoundedPlate(root.transform, "OLED inset", 0f, 0f, .011f,
+                .487f, .780f, .008f, .025f, deepBlack, false);
+            RoundedPlate(root.transform, "Header band", 0f, .343f, .023f,
+                .474f, .074f, .008f, .014f, body, false);
+            RoundedPlate(root.transform, "Footer band", 0f, -.345f, .024f,
+                .473f, .088f, .008f, .014f, body, false);
 
             content = new GameObject("Volas runtime buttons and labels").transform;
             content.SetParent(root.transform, false);
@@ -353,7 +355,76 @@ namespace Volas
             return renderer;
         }
 
-        private void BuildPointer()
+        // Runtime bevel-free rounded plates: actual curved geometry instead
+        // of square Unity cubes. This needs no asset bundle or project prefab.
+        private Renderer RoundedPlate(Transform parent, string name,
+            float x, float y, float z, float width, float height,
+            float depth, float radius, Material material, bool inPage)
+        {
+            const int stepsPerCorner = 6;
+            float halfWidth = width * .5f;
+            float halfHeight = height * .5f;
+            float cornerRadius = Mathf.Min(radius, Mathf.Min(halfWidth, halfHeight) * .95f);
+            var perimeter = new List<Vector2>(4 * (stepsPerCorner + 1));
+            for (int corner = 0; corner < 4; corner++)
+            {
+                float angleStart = -90f + corner * 90f;
+                float cx = corner == 0 || corner == 1
+                    ? halfWidth - cornerRadius : -halfWidth + cornerRadius;
+                float cy = corner == 1 || corner == 2
+                    ? halfHeight - cornerRadius : -halfHeight + cornerRadius;
+                for (int i = 0; i <= stepsPerCorner; i++)
+                {
+                    float angle = (angleStart + i * 90f / stepsPerCorner) *
+                        Mathf.Deg2Rad;
+                    perimeter.Add(new Vector2(cx + Mathf.Cos(angle) * cornerRadius,
+                        cy + Mathf.Sin(angle) * cornerRadius));
+                }
+            }
+
+            int n = perimeter.Count;
+            Vector3[] vertices = new Vector3[n * 2 + 2];
+            vertices[0] = new Vector3(0f, 0f, depth * .5f);
+            vertices[1] = new Vector3(0f, 0f, -depth * .5f);
+            for (int i = 0; i < n; i++)
+            {
+                vertices[2 + i] = new Vector3(perimeter[i].x, perimeter[i].y, depth * .5f);
+                vertices[2 + n + i] = new Vector3(perimeter[i].x, perimeter[i].y,
+                    -depth * .5f);
+            }
+            var triangles = new List<int>(n * 12);
+            for (int i = 0; i < n; i++)
+            {
+                int next = (i + 1) % n;
+                int fi = 2 + i;
+                int fn = 2 + next;
+                int bi = 2 + n + i;
+                int bn = 2 + n + next;
+                triangles.Add(0); triangles.Add(fi); triangles.Add(fn);
+                triangles.Add(1); triangles.Add(bn); triangles.Add(bi);
+                triangles.Add(fi); triangles.Add(bi); triangles.Add(bn);
+                triangles.Add(fi); triangles.Add(bn); triangles.Add(fn);
+            }
+            Mesh mesh = new Mesh();
+            mesh.name = "Volas rounded plate";
+            mesh.vertices = vertices;
+            mesh.triangles = triangles.ToArray();
+            mesh.RecalculateNormals();
+            mesh.RecalculateBounds();
+            if (inPage) buttonMeshes.Add(mesh);
+            else frameMeshes.Add(mesh);
+
+            GameObject go = new GameObject(name, typeof(MeshFilter), typeof(MeshRenderer));
+            go.transform.SetParent(parent, false);
+            go.transform.localPosition = new Vector3(x, y, z);
+            MeshFilter filter = go.GetComponent<MeshFilter>();
+            filter.sharedMesh = mesh;
+            MeshRenderer renderer = go.GetComponent<MeshRenderer>();
+            renderer.sharedMaterial = material;
+            return renderer;
+        }
+
+                private void BuildPointer()
         {
             GameObject lineObject = new GameObject("Volas menu selection ray");
             lineObject.transform.SetParent(root.transform, false);
@@ -488,6 +559,10 @@ namespace Volas
                 UnityEngine.Object.Destroy(child.gameObject);
             }
             buttons.Clear();
+            for (int i = 0; i < buttonMeshes.Count; i++)
+                if (buttonMeshes[i] != null)
+                    UnityEngine.Object.Destroy(buttonMeshes[i]);
+            buttonMeshes.Clear();
             hovered = -1;
             UpdateCategories();
 
@@ -645,10 +720,12 @@ namespace Volas
             float width, float height, Material material,
             Action action, bool centerLabel = false)
         {
-            Cube(content, "Button border", x, y, .042f,
-                width + .003f, height + .003f, .009f, buttonOutline);
-            Renderer renderer = Cube(content, "Button " + caption,
-                x, y, ButtonPlane, width, height, .010f, material);
+            RoundedPlate(content, "Button border", x, y, .042f,
+                width + .003f, height + .003f, .009f, .010f,
+                buttonOutline, true);
+            Renderer renderer = RoundedPlate(content, "Button " + caption,
+                x, y, ButtonPlane, width, height, .010f, .008f,
+                material, true);
             buttons.Add(new PhysicalButton
             {
                 X = x, Y = y, Width = width, Height = height,
@@ -690,6 +767,14 @@ namespace Volas
         internal void Dispose()
         {
             buttons.Clear();
+            for (int i = 0; i < buttonMeshes.Count; i++)
+                if (buttonMeshes[i] != null)
+                    UnityEngine.Object.Destroy(buttonMeshes[i]);
+            for (int i = 0; i < frameMeshes.Count; i++)
+                if (frameMeshes[i] != null)
+                    UnityEngine.Object.Destroy(frameMeshes[i]);
+            buttonMeshes.Clear();
+            frameMeshes.Clear();
             if (root != null) UnityEngine.Object.Destroy(root);
             root = null;
             pointerDot = null;
