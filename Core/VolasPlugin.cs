@@ -138,6 +138,7 @@ namespace Volas
             if (ExtraVisuals != null) ExtraVisuals.Dispose();
             if (Vr != null) Vr.Dispose();
             if (desktop != null) desktop.Dispose();
+            if (Game != null) Game.Dispose();
             Instance = null;
         }
     }

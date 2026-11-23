@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Reflection;
 using UnityEngine;
+using UnityEngine.XR;
 
 namespace Volas
 {
@@ -12,6 +13,8 @@ namespace Volas
         private Type photonType;
         private Camera cachedCamera;
         private float nextTypeLookup;
+        private Transform fallbackLeft;
+        private Transform fallbackRight;
         internal object Player { get; private set; }
 
         internal GameBridge()
@@ -64,7 +67,8 @@ namespace Volas
         {
             get
             {
-                return GetTransform("leftControllerTransform", "leftHandTransform", "leftHand");
+                return GetTransform("leftControllerTransform", "leftHandTransform", "leftHand")
+                    ?? TryTrackedHand(XRNode.LeftHand, ref fallbackLeft);
             }
         }
 
@@ -72,7 +76,8 @@ namespace Volas
         {
             get
             {
-                return GetTransform("rightControllerTransform", "rightHandTransform", "rightHand");
+                return GetTransform("rightControllerTransform", "rightHandTransform", "rightHand")
+                    ?? TryTrackedHand(XRNode.RightHand, ref fallbackRight);
             }
         }
 
@@ -81,6 +86,53 @@ namespace Volas
             if (Player == null) return null;
             var value = GetMember(Player.GetType(), Player, names);
             return value as Transform ?? (value as GameObject)?.transform;
+        }
+
+        // Some Gorilla Tag releases rename player hand fields. Resolve tracked
+        // XR hand poses relative to the real headset as a non-invasive fallback.
+        // This creates no visible meshes and never changes player movement.
+        private Transform TryTrackedHand(XRNode node, ref Transform fallback)
+        {
+            Camera camera = HeadCamera;
+            if (camera == null) return null;
+            var headset = InputDevices.GetDeviceAtXRNode(XRNode.Head);
+            var controller = InputDevices.GetDeviceAtXRNode(node);
+            if (!headset.isValid || !controller.isValid) return null;
+
+            Vector3 localHead;
+            Vector3 localHand;
+            if (!headset.TryGetFeatureValue(CommonUsages.devicePosition, out localHead) ||
+                !controller.TryGetFeatureValue(CommonUsages.devicePosition, out localHand))
+                return null;
+
+            Quaternion localHeadRotation;
+            Quaternion localHandRotation;
+            if (!headset.TryGetFeatureValue(CommonUsages.deviceRotation, out localHeadRotation))
+                localHeadRotation = Quaternion.identity;
+            if (!controller.TryGetFeatureValue(CommonUsages.deviceRotation, out localHandRotation))
+                localHandRotation = Quaternion.identity;
+
+            Quaternion originRotation = camera.transform.rotation *
+                Quaternion.Inverse(localHeadRotation);
+            if (fallback == null)
+            {
+                var go = new GameObject(node == XRNode.LeftHand
+                    ? "Volas XR left fallback"
+                    : "Volas XR right fallback");
+                fallback = go.transform;
+            }
+            fallback.position = camera.transform.position +
+                originRotation * (localHand - localHead);
+            fallback.rotation = originRotation * localHandRotation;
+            return fallback;
+        }
+
+        internal void Dispose()
+        {
+            if (fallbackLeft != null) UnityEngine.Object.Destroy(fallbackLeft.gameObject);
+            if (fallbackRight != null) UnityEngine.Object.Destroy(fallbackRight.gameObject);
+            fallbackLeft = null;
+            fallbackRight = null;
         }
 
         internal Vector3 Position
