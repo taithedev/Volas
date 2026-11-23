@@ -1,7 +1,8 @@
 param(
     [string]$GamePath = "",
     [switch]$Install,
-    [string]$Framework = ""
+    [string]$Framework = "",
+    [string]$UnityEngineFacadePath = ""
 )
 $ErrorActionPreference = "Stop"
 $projectRoot = Split-Path -Parent $PSScriptRoot
@@ -48,20 +49,46 @@ $bepinex = Join-Path $selected "BepInEx\core\BepInEx.dll"
 if (-not (Test-Path -LiteralPath $bepinex)) {
     throw "BepInEx 5 Mono is missing: $bepinex"
 }
-$required = @("UnityEngine.CoreModule.dll", "UnityEngine.IMGUIModule.dll", "UnityEngine.InputLegacyModule.dll", "UnityEngine.PhysicsModule.dll", "UnityEngine.XRModule.dll", "UnityEngine.TextRenderingModule.dll", "UnityEngine.AudioModule.dll")
+$required = @("UnityEngine.CoreModule.dll", "UnityEngine.IMGUIModule.dll", "UnityEngine.UI.dll", "UnityEngine.UIModule.dll", "UnityEngine.InputLegacyModule.dll", "UnityEngine.PhysicsModule.dll", "UnityEngine.XRModule.dll", "UnityEngine.TextRenderingModule.dll", "UnityEngine.AudioModule.dll")
 $missing = @($required | Where-Object { -not (Test-Path -LiteralPath (Join-Path $managed $_)) })
 if ($missing.Count -gt 0) {
     throw ("Missing Unity assemblies: " + ($missing -join ", "))
+}
+# Explicitly resolve UnityEngine.dll when the installed BepInEx was compiled
+# against the UnityEngine facade. Using CoreModule alone can cause repeated CS0012.
+if (-not $UnityEngineFacadePath) { $UnityEngineFacadePath = $env:VOLAS_UNITYENGINE_DLL }
+if (-not $UnityEngineFacadePath) {
+    foreach ($candidate in @(
+        (Join-Path $managed "UnityEngine.dll"),
+        (Join-Path $selected "BepInEx\core\UnityEngine.dll"),
+        (Join-Path $selected "BepInEx\plugins\UnityEngine.dll")
+    )) {
+        if (Test-Path -LiteralPath $candidate) {
+            $UnityEngineFacadePath = $candidate
+            break
+        }
+    }
+}
+if ($UnityEngineFacadePath) {
+    if (-not (Test-Path -LiteralPath $UnityEngineFacadePath)) {
+        throw "UnityEngine.dll facade was not found at: $UnityEngineFacadePath"
+    }
+    $UnityEngineFacadePath = (Resolve-Path -LiteralPath $UnityEngineFacadePath).Path
+    Write-Host "UnityEngine.dll facade: $UnityEngineFacadePath"
+} else {
+    Write-Warning "No UnityEngine.dll facade found. If CS0012 mentions UnityEngine MonoBehaviour, ensure your BepInEx version matches the installed game and see Docs/TROUBLESHOOTING.md."
 }
 if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
     throw "Missing .NET SDK. Install .NET SDK or Visual Studio .NET desktop development."
 }
 # Remember this path so Ctrl+Shift+B works in Visual Studio afterwards.
 $escaped = [System.Security.SecurityElement]::Escape($selected)
+$facadeXml = [System.Security.SecurityElement]::Escape($UnityEngineFacadePath)
 $props = @"
 <Project>
   <PropertyGroup>
     <GorillaTagDir>$escaped</GorillaTagDir>
+    <UnityEngineFacadePath>$facadeXml</UnityEngineFacadePath>
   </PropertyGroup>
 </Project>
 "@
@@ -87,6 +114,7 @@ foreach ($candidate in $candidates) {
         "--nologo", "-p:GorillaTagDir=$selected",
         "-p:VolasTargetFramework=$candidate"
     )
+    if ($UnityEngineFacadePath) { $argsList += "-p:UnityEngineFacadePath=$UnityEngineFacadePath" }
     if ($Install) { $argsList += "-p:InstallToGame=true" }
     & dotnet @argsList
     if ($LASTEXITCODE -eq 0) {
