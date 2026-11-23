@@ -12,6 +12,7 @@ namespace Volas
             TelemetryFeatures.Register(registry);
             UtilityFeatures.Register(registry);
             SettingsFeatures.Register(registry);
+            LocalFeaturePack.Register(registry);
         }
     }
 }
