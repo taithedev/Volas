@@ -151,6 +151,12 @@ namespace Volas
         private bool GetLeftYPressed()
         {
             bool pressed;
+            // GT's ControllerInputPoller normalizes SteamVR + Meta controller
+            // actions. Unity XR secondaryButton alone can remain false.
+            if (Game != null &&
+                Game.TryControllerButton("leftControllerSecondaryButton", out pressed) &&
+                pressed)
+                return true;
             InputDevice primary = InputDevices.GetDeviceAtXRNode(XRNode.LeftHand);
             if (primary.isValid &&
                 primary.TryGetFeatureValue(CommonUsages.secondaryButton, out pressed) && pressed)
