@@ -1,0 +1,3 @@
+# Local display tools and wrist improvements
+
+The wrist menu now opens on Local, a collection of display-only tools requiring no modded room. The desktop Local tab and F5 legacy controls expose the same diagnostics: frame time, elapsed session, XR device detection, battery when supported, FPS, clock, position and heading. Clear HUD resets local telemetry. Shared cached telemetry is refreshed four times a second rather than separately building VR/desktop strings. Wrist navigation has a Stop button, smoothed pose tracking and labels for room-restricted features. Existing gameplay and player ESP restrictions are unchanged; no anti-cheat or lobby bypass is introduced. No local compilation or headset test has been performed.

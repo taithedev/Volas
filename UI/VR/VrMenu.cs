@@ -19,7 +19,7 @@ namespace Volas
         private readonly List<Text> labels = new List<Text>();
         private readonly List<int> fontSizes = new List<int>();
         private readonly Slot[] rows = new Slot[PerPage], favorites = new Slot[PerPage];
-        private Slot home, saved, enabled, all, previous, next;
+        private Slot home, saved, enabled, all, previous, next, local, reset;
         private GameObject root, dot;
         private RectTransform panel;
         private LineRenderer beam;
@@ -30,8 +30,12 @@ namespace Volas
         private bool dirty = true, wasOpen, oldTrigger, touchReady;
         private float nextPress, nextStats, messageUntil, lastFontScale = -1f;
         private string category = "", message = "";
-        private enum Mode { Home, Category, Saved, Enabled, All }
-        private Mode mode;
+        private enum Mode { Local, Home, Category, Saved, Enabled, All }
+        private Mode mode = Mode.Local;
+        private bool roomAllowed;
+        private float nextRoomCheck;
+        private bool lastPreview;
+        private bool hasPose;
         internal string Status { get; private set; } = "VR menu ready";
 
         private static readonly Color Black = new Color32(10,10,12,255);
@@ -57,7 +61,7 @@ namespace Volas
             if (!plugin.VrOpen)
             {
                 if (root != null && root.activeSelf) root.SetActive(false);
-                if (wasOpen) { HidePointer(); dirty = true; wasOpen = false; hovered = -1; }
+                if (wasOpen) { HidePointer(); dirty = true; wasOpen = false; hovered = -1; hasPose = false; }
                 Status = "Closed | Y or F7";
                 return;
             }
@@ -70,6 +74,7 @@ namespace Volas
                 return;
             }
             if (root == null) Create();
+            if (!root.activeSelf) root.SetActive(true);
             Transform head = camera.transform;
             Transform left = plugin.Game.LeftHand;
             Vector3 pos = head.position + head.forward*.52f - head.right*.055f - head.up*.025f;
@@ -85,11 +90,16 @@ namespace Volas
             }
             // Canvas front is -Z; point +Z away from the viewer to avoid reversed labels.
             Vector3 facing = pos-head.position;
-            root.transform.SetPositionAndRotation(pos, facing.sqrMagnitude > .0001f ?
-                Quaternion.LookRotation(facing.normalized,head.up) : head.rotation);
+            Quaternion desired = facing.sqrMagnitude > .0001f ? Quaternion.LookRotation(facing.normalized,head.up) : head.rotation;
+            if (!hasPose || preview != lastPreview) root.transform.SetPositionAndRotation(pos, desired);
+            else
+            {
+                float blend = 1f - Mathf.Exp(-28f * Time.unscaledDeltaTime);
+                root.transform.SetPositionAndRotation(Vector3.Lerp(root.transform.position,pos,blend), Quaternion.Slerp(root.transform.rotation,desired,blend));
+            }
+            hasPose = true; lastPreview = preview;
             root.transform.localScale = Vector3.one * plugin.Settings.VrScale.Value *
                 (plugin.Compact ? .82f : 1f);
-            root.SetActive(true);
             Status = preview ? "Camera preview" : "Wrist menu active";
 
             InputDevice controller = RightDevice();
@@ -101,6 +111,12 @@ namespace Volas
             {
                 wasOpen = true; dirty = true; oldTrigger = trigger; touchReady = false;
                 nextPress = Time.unscaledTime+.18f;
+            }
+            if (Time.unscaledTime >= nextRoomCheck)
+            {
+                nextRoomCheck = Time.unscaledTime + .35f;
+                bool allowed = plugin.Game.IsSoloOrModdedRoom();
+                if (allowed != roomAllowed) { roomAllowed = allowed; dirty = true; }
             }
             if (dirty || revision != plugin.Features.Revision) Refresh();
             UpdateFont();
@@ -186,10 +202,11 @@ namespace Volas
             TextAt(panel,"VOLAS",24,16,180,52,44,White,TextAnchor.MiddleLeft);
             fps = TextAt(panel,"",208,18,142,48,27,Muted,TextAnchor.MiddleRight);
             Button(364,20,92,48,"Close",()=>plugin.VrOpen=false,26);
-            home = Button(16,90,106,54,"Home",()=>Open(Mode.Home),28);
-            saved = Button(130,90,106,54,"Saved",()=>Open(Mode.Saved),28);
-            enabled = Button(244,90,106,54,"Active",()=>Open(Mode.Enabled),28);
-            all = Button(358,90,106,54,"All",()=>Open(Mode.All),28);
+            local = Button(16,90,84,54,"Local",()=>Open(Mode.Local),26);
+            home = Button(106,90,84,54,"Cats",()=>Open(Mode.Home),26);
+            saved = Button(196,90,84,54,"Saved",()=>Open(Mode.Saved),26);
+            enabled = Button(286,90,84,54,"Active",()=>Open(Mode.Enabled),26);
+            all = Button(376,90,88,54,"All",()=>Open(Mode.All),26);
             heading = TextAt(panel,"Categories",20,150,440,40,30,Muted,TextAnchor.MiddleLeft);
             for (int i=0;i<PerPage;i++)
             {
@@ -198,7 +215,8 @@ namespace Volas
                 favorites[i]=Button(392,y,72,66,"",null,34);
             }
             previous=Button(16,500,112,58,"Prev",()=>Move(-1),32);
-            pageLabel=TextAt(panel,"",132,500,216,58,34,White);
+            pageLabel=TextAt(panel,"",132,500,136,58,30,White);
+            reset=Button(272,500,76,58,"Stop",()=>{plugin.Features.DisableAll();Notify();},26);
             next=Button(352,500,112,58,"Next",()=>Move(1),32);
             ImageAt(panel,16,570,448,54,Surface);
             feedback=TextAt(panel,"",24,574,432,46,27,White);
@@ -276,13 +294,14 @@ namespace Volas
         }
         private static void Paint(Slot s,bool hover)
         {
-            s.Image.color=s.Selected?White:hover?Gray:Surface;
+            s.Image.color=s.Selected?(hover ? new Color32(210,210,218,255) : White):hover?Gray:Surface;
             s.Text.color=s.Selected?Ink:s.Available?White:Muted;
         }
         private void Refresh()
         {
             dirty=false; revision=plugin.Features.Revision; hovered=-1;
-            Set(home,"Home",()=>Open(Mode.Home),mode==Mode.Home||mode==Mode.Category);
+            Set(local,"Local",()=>Open(Mode.Local),mode==Mode.Local);
+            Set(home,"Cats",()=>Open(Mode.Home),mode==Mode.Home||mode==Mode.Category);
             Set(saved,"Saved",()=>Open(Mode.Saved),mode==Mode.Saved);
             Set(enabled,"Active",()=>Open(Mode.Enabled),mode==Mode.Enabled);
             Set(all,"All",()=>Open(Mode.All),mode==Mode.All);
@@ -294,7 +313,8 @@ namespace Volas
             }
             else
             {
-                if(mode==Mode.Saved) {features=plugin.Features.InCategory("Favorites");heading.text="Favorites";}
+                if(mode==Mode.Local) {features=plugin.Features.All.FindAll(f=>(f.Category=="Local"||f.Category=="Telemetry")&&!f.NeedsModdedRoom);heading.text="Local display tools";}
+                else if(mode==Mode.Saved) {features=plugin.Features.InCategory("Favorites");heading.text="Favorites";}
                 else if(mode==Mode.Enabled) {features=plugin.Features.All.FindAll(f=>f.Enabled);heading.text="Active features";}
                 else if(mode==Mode.All) {features=plugin.Features.All;heading.text="All features";}
                 else {features=plugin.Features.InCategory(category);heading.text=category;}
@@ -318,7 +338,9 @@ namespace Volas
                 else
                 {
                     Feature f=features[index];bool favorite=plugin.Features.IsFavorite(f);
-                    Set(rows[i],f.Label,()=>{plugin.Features.Activate(f);Notify();},f.Enabled);
+                    bool locked=f.NeedsModdedRoom&&!roomAllowed&&!f.Enabled;
+                    Set(rows[i],locked ? "[LOCK] "+f.Label : f.Label,()=>{plugin.Features.Activate(f);Notify();},f.Enabled);
+                    if(locked) rows[i].Text.color=Muted;
                     Set(favorites[i],favorite?"*":"+",()=>{plugin.Features.ToggleFavorite(f);Notify();},favorite);
                 }
             }

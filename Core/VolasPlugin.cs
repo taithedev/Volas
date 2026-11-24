@@ -59,11 +59,14 @@ namespace Volas
         }
 
         internal float FramesPerSecond { get; private set; }
+        internal float FrameMilliseconds { get { return smoothFrameDelta * 1000f; } }
+        internal float SessionStarted { get; private set; }
         private float smoothFrameDelta = 1f / 90f;
 
         private void Awake()
         {
             Instance = this;
+            SessionStarted = Time.realtimeSinceStartup;
             Settings = new VolasConfiguration(Config);
             Compact = Settings.CompactMenu.Value;
             RainbowTheme = Settings.RainbowAccent.Value;

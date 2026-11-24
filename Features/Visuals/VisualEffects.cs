@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.XR;
+using System.Text;
 
 namespace Volas
 {
@@ -15,6 +17,10 @@ namespace Volas
         internal bool Halo;
         internal bool Breadcrumbs;
         internal bool FpsHud;
+        internal bool FrameTimeHud, SessionHud, TrackingHud, BatteryHud;
+        private readonly StringBuilder telemetry = new StringBuilder(256);
+        private float nextTelemetry;
+        private string cachedTelemetry = "";
         internal bool ClockHud;
         internal bool PositionHud;
         internal bool HeadingHud;
@@ -97,7 +103,7 @@ namespace Volas
             }
             else DestroyLine(ref beam);
 
-            var head = Halo || FpsHud || ClockHud || PositionHud || HeadingHud ? plugin.Game.HeadCamera : null;
+            var head = Halo || HasTelemetry ? plugin.Game.HeadCamera : null;
             if (Halo && head != null)
             {
                 if (headRing == null) headRing = Line("Volas head halo", 48, 0.012f, true);
@@ -143,42 +149,72 @@ namespace Volas
             }
         }
 
+        internal bool HasTelemetry
+        {
+            get { return FpsHud || ClockHud || PositionHud || HeadingHud || FrameTimeHud || SessionHud || TrackingHud || BatteryHud; }
+        }
+
+        internal string LocalTelemetry()
+        {
+            if (!HasTelemetry) { cachedTelemetry = ""; nextTelemetry = 0f; return ""; }
+            if (Time.unscaledTime < nextTelemetry) return cachedTelemetry;
+            nextTelemetry = Time.unscaledTime + .25f;
+            telemetry.Length = 0;
+            if (FpsHud) telemetry.Append("FPS ").Append(plugin.FramesPerSecond.ToString("0")).AppendLine();
+            if (FrameTimeHud) telemetry.Append("FRAME ").Append(plugin.FrameMilliseconds.ToString("0.0")).AppendLine(" ms");
+            if (ClockHud) telemetry.AppendLine(DateTime.Now.ToString("HH:mm:ss"));
+            if (SessionHud) telemetry.Append("SESSION ").AppendLine(TimeSpan.FromSeconds(Mathf.Max(0f, Time.realtimeSinceStartup - plugin.SessionStarted)).ToString(@"hh\:mm\:ss"));
+            if (PositionHud)
+            {
+                Vector3 p = plugin.Game.Position;
+                telemetry.Append("XYZ ").Append(p.x.ToString("0.0")).Append(" / ").Append(p.y.ToString("0.0")).Append(" / ").AppendLine(p.z.ToString("0.0"));
+            }
+            if (HeadingHud) telemetry.Append("YAW ").AppendLine(plugin.Game.Heading.ToString("0"));
+            if (TrackingHud || BatteryHud)
+            {
+                InputDevice left = InputDevices.GetDeviceAtXRNode(XRNode.LeftHand);
+                InputDevice right = InputDevices.GetDeviceAtXRNode(XRNode.RightHand);
+                if (TrackingHud)
+                    telemetry.Append("XR H:").Append(InputDevices.GetDeviceAtXRNode(XRNode.Head).isValid ? "OK" : "--")
+                        .Append(" L:").Append(left.isValid ? "OK" : "--").Append(" R:").AppendLine(right.isValid ? "OK" : "--");
+                if (BatteryHud) telemetry.Append("BAT L:").Append(Battery(left)).Append(" R:").AppendLine(Battery(right));
+            }
+            cachedTelemetry = telemetry.ToString().TrimEnd();
+            return cachedTelemetry;
+        }
+
+        private static string Battery(InputDevice device)
+        {
+            float value;
+            return device.isValid && device.TryGetFeatureValue(CommonUsages.batteryLevel, out value) ?
+                (Mathf.Clamp01(value) * 100f).ToString("0") + "%" : "N/A";
+        }
+
         private void UpdateHud(Camera head)
         {
-            bool show = FpsHud || ClockHud || PositionHud || HeadingHud;
-            if (!show || head == null)
+            if (!HasTelemetry || head == null)
             {
                 if (hud != null) { UnityEngine.Object.Destroy(hud.gameObject); hud = null; }
                 return;
             }
-
             if (hud == null)
             {
                 var go = new GameObject("Volas VR telemetry");
                 go.transform.SetParent(head.transform, false);
-                go.transform.localPosition = new Vector3(-0.20f, 0.17f, 0.85f);
-                go.transform.localRotation = Quaternion.Euler(0f, 0f, 0f);
+                go.transform.localPosition = new Vector3(-.20f, .17f, .85f);
                 hud = go.AddComponent<TextMesh>();
                 hud.anchor = TextAnchor.UpperLeft;
                 hud.alignment = TextAlignment.Left;
                 hud.fontSize = 54;
-                hud.characterSize = 0.008f;
-                hud.color = plugin.Accent;
+                hud.characterSize = .0025f;
+                hud.color = Color.white;
+                hud.fontStyle = FontStyle.Bold;
             }
-
+            if (hud.transform.parent != head.transform) hud.transform.SetParent(head.transform, false);
             if (Time.unscaledTime < nextHudUpdate) return;
-            nextHudUpdate = Time.unscaledTime + 0.2f;
-            var lines = new List<string>();
-            if (FpsHud) lines.Add("FPS  " + plugin.FramesPerSecond.ToString("0"));
-            if (ClockHud) lines.Add(DateTime.Now.ToString("HH:mm:ss"));
-            if (PositionHud)
-            {
-                var p = plugin.Game.Position;
-                lines.Add("XYZ " + p.x.ToString("0.0") + " / " + p.y.ToString("0.0") + " / " + p.z.ToString("0.0"));
-            }
-            if (HeadingHud) lines.Add("Yaw  " + plugin.Game.Heading.ToString("0") + " deg");
-            hud.color = plugin.Accent;
-            hud.text = string.Join("\n", lines.ToArray());
+            nextHudUpdate = Time.unscaledTime + .25f;
+            string value = LocalTelemetry();
+            if (hud.text != value) hud.text = value;
         }
 
         private static GameObject Sphere(string name, float diameter)

@@ -78,6 +78,10 @@ namespace Volas
             DrawFeature("clock_hud");
             DrawFeature("pos_hud");
             DrawFeature("heading_hud");
+            DrawFeature("frame_time");
+            DrawFeature("session_clock");
+            DrawFeature("tracking_status");
+            DrawFeature("controller_battery");
             GUILayout.Space(8f);
             GUILayout.Label("APPEARANCE");
             GUILayout.Label("Opacity: " + plugin.Settings.DesktopOpacity.Value.ToString("0.00"));

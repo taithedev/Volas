@@ -51,7 +51,7 @@ namespace Volas
 
         private static readonly string[] Tabs =
         {
-            "Settings", "Home", "Players", "VR Rig", "Movement", "Visuals",
+            "Settings", "Home", "Local", "Players", "VR Rig", "Movement", "Visuals",
             "Overpowered", "Master", "Global", "Gamemode", "Fun", "Plugin",
             "Zones", "Safety", "Projectiles", "Favorites", "Enabled", "All"
         };
@@ -157,7 +157,7 @@ namespace Volas
             resize.IsResize = true;
             resize.OnComplete = SavePosition;
 
-            hudText = MakeText(canvasRect, "", 10f, 8f, 320f, 102f, 12, white);
+            hudText = MakeText(canvasRect, "", 10f, 8f, 340f, 190f, 12, white);
             hudText.gameObject.SetActive(false);
             crosshairH = MakeImage(canvasRect, "Crosshair H", white);
             crosshairV = MakeImage(canvasRect, "Crosshair V", white);
@@ -323,25 +323,13 @@ namespace Volas
 
         private void UpdateHUD()
         {
-            var messages = new List<string>();
-            if (plugin.Effects.FpsHud)
-                messages.Add("FPS  " + plugin.FramesPerSecond.ToString("0"));
-            if (plugin.Effects.ClockHud)
-                messages.Add("TIME " + DateTime.Now.ToString("HH:mm:ss"));
-            if (plugin.Effects.PositionHud)
-            {
-                Vector3 p = plugin.Game.Position;
-                messages.Add("XYZ " + p.x.ToString("0.0") + " " + p.y.ToString("0.0") +
-                    " " + p.z.ToString("0.0"));
-            }
-            if (plugin.Effects.HeadingHud)
-                messages.Add("YAW  " + plugin.Game.Heading.ToString("0"));
-            hudText.gameObject.SetActive(messages.Count != 0);
-            if (messages.Count > 0) hudText.text = string.Join("\n", messages.ToArray());
+            string value = plugin.Effects.LocalTelemetry();
+            bool hasText = !string.IsNullOrEmpty(value);
+            hudText.gameObject.SetActive(hasText);
+            if (hasText && hudText.text != value) hudText.text = value;
             crosshairH.gameObject.SetActive(plugin.Effects.DesktopCrosshair);
             crosshairV.gameObject.SetActive(plugin.Effects.DesktopCrosshair);
-            // HUD remains visible even when the menu is closed.
-            if (!visible) root.SetActive(messages.Count != 0 || plugin.Effects.DesktopCrosshair);
+            if (!visible) root.SetActive(hasText || plugin.Effects.DesktopCrosshair);
         }
 
         private void RedrawPage()
@@ -749,6 +737,7 @@ namespace Volas
                 case "All": return new List<Feature>(all);
                 case "Favorites": return plugin.Features.InCategory("Favorites");
                 case "Enabled": return all.FindAll(f => f.Enabled);
+                case "Local": return plugin.Features.All.FindAll(f => (f.Category == "Local" || f.Category == "Telemetry") && !f.NeedsModdedRoom);
                 case "Players": return plugin.Features.InCategory("Telemetry");
                 case "Projectiles": return plugin.Features.InCategory("Gun Mods");
                 case "Fun": return plugin.Features.InCategory("Fun");
