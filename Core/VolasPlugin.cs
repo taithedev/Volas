@@ -24,6 +24,8 @@ namespace Volas
         internal VrMenu Vr { get; private set; }
         internal VolasConfiguration Settings { get; private set; }
         private DesktopMenu desktop;
+        private LegacyDesktopMenu legacyDesktop;
+        private bool legacyFaultLogged;
         private bool lastVrButton;
         private float nextInputWarning;
         private bool desktopFaultLogged;
@@ -32,6 +34,7 @@ namespace Volas
 
         internal bool VrOpen { get; set; }
         internal bool DesktopOpen { get; set; }
+        internal bool LegacyDesktopOpen { get; set; }
         private bool compact;
         private bool rainbowTheme;
         internal bool Compact
@@ -79,7 +82,8 @@ namespace Volas
             // A desktop uGUI initialization failure must never disable the physical VR menu.
             try { desktop = new DesktopMenu(this); }
             catch (Exception ex) { Logger.LogError("Volas PC menu initialization failed (VR remains usable): " + ex); }
-            Logger.LogInfo("Volas loaded. F6 = PC menu, left Y = VR menu, F7 = VR test, End = reset.");
+            legacyDesktop = new LegacyDesktopMenu(this);
+            Logger.LogInfo("Volas loaded. F6 = modern PC, F5 = legacy IMGUI, left Y = VR menu, F7 = VR test, End = reset.");
             Logger.LogInfo(AssemblyDiagnostics.AssemblyInfo());
         }
 
@@ -90,7 +94,16 @@ namespace Volas
             Game.Refresh();
 
             if (Settings.DesktopShortcut.Value.IsDown())
+            {
+                LegacyDesktopOpen = false;
+                legacyDesktop?.Close();
                 DesktopOpen = !DesktopOpen;
+            }
+            else if (Settings.LegacyDesktopShortcut.Value.IsDown())
+            {
+                DesktopOpen = false;
+                LegacyDesktopOpen = !LegacyDesktopOpen;
+            }
 
             if (Settings.ResetShortcut.Value.IsDown())
             {
@@ -139,6 +152,27 @@ namespace Volas
                         desktopFaultLogged = true;
                         Logger.LogError("Volas desktop menu update failed; VR remains available: " + ex);
                     }
+                }
+            }
+        }
+
+        private void LateUpdate()
+        {
+            if (legacyDesktop != null) legacyDesktop.Tick();
+        }
+
+        private void OnGUI()
+        {
+            if (legacyDesktop == null || !LegacyDesktopOpen) return;
+            try { legacyDesktop.Draw(); }
+            catch (Exception ex)
+            {
+                LegacyDesktopOpen = false;
+                legacyDesktop.Close();
+                if (!legacyFaultLogged)
+                {
+                    legacyFaultLogged = true;
+                    Logger.LogError("Volas legacy desktop menu failed: " + ex);
                 }
             }
         }
@@ -209,6 +243,7 @@ namespace Volas
             if (Effects != null) Effects.Dispose();
             if (ExtraVisuals != null) ExtraVisuals.Dispose();
             if (Vr != null) Vr.Dispose();
+            if (legacyDesktop != null) legacyDesktop.Close();
             if (desktop != null) desktop.Dispose();
             if (Game != null) Game.Dispose();
             Instance = null;

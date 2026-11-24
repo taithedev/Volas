@@ -40,14 +40,14 @@ namespace Volas
         private CursorLockMode savedLockMode;
         private float lastStatusUpdate;
         private float lastHUDUpdate;
-        private readonly Color ink = new Color(.023f, .022f, .033f, .96f);
-        private readonly Color headerColor = new Color(.035f, .032f, .050f, .49f);
-        private readonly Color panelColor = new Color(.046f, .043f, .068f, .60f);
-        private readonly Color hoverColor = new Color(.11f, .079f, .16f, .45f);
-        private readonly Color borderColor = new Color(.52f, .46f, .63f, .105f);
-        private readonly Color purple = new Color(.455f, .242f, .91f, 1f);
-        private readonly Color white = new Color(.89f, .87f, .93f, 1f);
-        private readonly Color muted = new Color(.45f, .43f, .51f, 1f);
+        private readonly Color ink = new Color(0.026f, 0.026f, 0.026f, .96f);
+        private readonly Color headerColor = new Color(0.039f, 0.039f, 0.039f, .49f);
+        private readonly Color panelColor = new Color(0.052f, 0.052f, 0.052f, .60f);
+        private readonly Color hoverColor = new Color(0.116f, 0.116f, 0.116f, .45f);
+        private readonly Color borderColor = new Color(0.537f, 0.537f, 0.537f, .105f);
+        private readonly Color accentGray = new Color(0.536f, 0.536f, 0.536f, 1f);
+        private readonly Color white = new Color(0.897f, 0.897f, 0.897f, 1f);
+        private readonly Color muted = new Color(0.463f, 0.463f, 0.463f, 1f);
 
         private static readonly string[] Tabs =
         {
@@ -59,8 +59,7 @@ namespace Volas
         internal DesktopMenu(VolasPlugin owner)
         {
             plugin = owner;
-            font = Resources.GetBuiltinResource<Font>("Arial.ttf")
-                ?? Font.CreateDynamicFontFromOSFont("Arial", 13);
+            font = ResolveFont();
             rounded = MakeRoundSprite(48, 13);
             softRounded = MakeRoundSprite(48, 8);
 
@@ -78,7 +77,7 @@ namespace Volas
             canvasRect = root.GetComponent<RectTransform>();
             EnsureEventSystem();
 
-            var shade = MakeImage(canvasRect, "Window Shadow", new Color(0f, 0f, 0f, .22f),
+            var shade = MakeImage(canvasRect, "Window Shadow", new Color(0.000f, 0.000f, 0.000f, .22f),
                 rounded, true);
             Place(shade.rectTransform, 209f, 63f, 767f, 500f);
             // The shadow lives behind the main window, but moves with the window.
@@ -91,24 +90,24 @@ namespace Volas
             Place(shade.rectTransform, 6f, 8f, 760f, 500f);
             shade.transform.SetAsFirstSibling();
 
-            windowBackground = MakeImage(window, "Frosted dark graphite",
+            windowBackground = MakeImage(window, "OLED graphite",
                 new Color(ink.r, ink.g, ink.b, plugin.Settings.DesktopOpacity.Value),
                 rounded, true);
             Stretch(windowBackground.rectTransform);
             var rim = MakeImage(window, "Subtle border", borderColor, rounded, true);
             StretchInset(rim.rectTransform, 0f);
-            innerBackground = MakeImage(window, "Inner glass", new Color(ink.r, ink.g, ink.b, .98f),
+            innerBackground = MakeImage(window, "Inner panel", new Color(ink.r, ink.g, ink.b, .98f),
                 rounded, true);
             StretchInset(innerBackground.rectTransform, 1f);
-            innerBackground.color = new Color(.030f, .028f, .043f,
+            innerBackground.color = new Color(0.034f, 0.034f, 0.034f,
                 plugin.Settings.DesktopOpacity.Value * .85f);
             var header = MakeImage(window, "Header strip", headerColor, softRounded, true);
             header.raycastTarget = true;
             Place(header.rectTransform, 4f, 3f, 752f, 38f);
 
-            MakeText(window, "volas", 14f, 8f, 62f, 20f, 15, purple, true);
+            MakeText(window, "volas", 14f, 8f, 62f, 20f, 15, accentGray, true);
             MakeText(window, "v1.4.0", 79f, 11f, 72f, 18f, 10, muted);
-            MakeText(window, "⌕", 531f, 9f, 17f, 22f, 15, purple);
+            MakeText(window, "⌕", 531f, 9f, 17f, 22f, 15, accentGray);
             BuildSearch();
             MakeText(window, "⚙", 706f, 9f, 18f, 22f, 17, muted);
             MakeButton(window, "Settings hitbox", "", 697f, 6f, 30f, 28f,
@@ -124,7 +123,7 @@ namespace Volas
 
             RectTransform navViewport = MakeRect(window, "Navigation viewport");
             Place(navViewport, 13f, 43f, 735f, 32f);
-            navViewport.gameObject.AddComponent<Image>().color = new Color(0f, 0f, 0f, .001f);
+            navViewport.gameObject.AddComponent<Image>().color = new Color(0.000f, 0.000f, 0.000f, .001f);
             var navMask = navViewport.gameObject.AddComponent<RectMask2D>();
             var scroll = navViewport.gameObject.AddComponent<ScrollRect>();
             scroll.horizontal = true;
@@ -168,6 +167,17 @@ namespace Volas
             window.gameObject.SetActive(false);
         }
 
+        private static Font ResolveFont()
+        {
+            Font result = null;
+            try { result = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"); } catch (Exception) { }
+            if (result == null)
+            {
+                try { result = Resources.GetBuiltinResource<Font>("Arial.ttf"); } catch (Exception) { }
+            }
+            return result ?? Font.CreateDynamicFontFromOSFont("Arial", 13);
+        }
+
         private void EnsureEventSystem()
         {
             var events = UnityEngine.Object.FindObjectOfType<EventSystem>();
@@ -190,7 +200,7 @@ namespace Volas
         private void BuildSearch()
         {
             Image fieldImage = MakeImage(window, "Search background",
-                new Color(.070f, .062f, .115f, .73f), softRounded, true);
+                new Color(0.082f, 0.082f, 0.082f, .73f), softRounded, true);
             Place(fieldImage.rectTransform, 545f, 7f, 140f, 24f);
             fieldImage.raycastTarget = true;
             searchBox = fieldImage.gameObject.AddComponent<InputField>();
@@ -228,7 +238,7 @@ namespace Volas
                 if (active)
                 {
                     var under = MakeImage(btn.transform as RectTransform,
-                        "Violet underline", purple);
+                        "Active underline", accentGray);
                     Place(under.rectTransform, 5f, 27f, width - 10f, 2f);
                 }
                 x += width + 1f;
@@ -261,7 +271,7 @@ namespace Volas
             {
                 lastOpacity = alpha;
                 windowBackground.color = new Color(ink.r, ink.g, ink.b, alpha);
-                innerBackground.color = new Color(.030f, .028f, .043f, alpha * .85f);
+                innerBackground.color = new Color(0.034f, 0.034f, 0.034f, alpha * .85f);
             }
             bool open = plugin.DesktopOpen;
             if (open != visible)
@@ -291,6 +301,7 @@ namespace Volas
                 RedrawPage();
             if (open)
             {
+                ClampWindow();
                 Cursor.lockState = CursorLockMode.None;
                 Cursor.visible = true;
             }
@@ -365,15 +376,15 @@ namespace Volas
                     string label = cols[col][i];
                     float y = 1f + 43f * i;
                     Image highlight = MakeImage(pageRoot, "Category " + label,
-                        new Color(.08f, .06f, .12f, .10f));
+                        new Color(0.087f, 0.087f, 0.087f, .10f));
                     highlight.raycastTarget = true;
                     Place(highlight.rectTransform, x, y, 237f, 38f);
                     Button button = highlight.gameObject.AddComponent<Button>();
                     button.transition = Selectable.Transition.ColorTint;
                     ColorBlock colors = button.colors;
                     colors.normalColor = Color.white;
-                    colors.highlightedColor = new Color(.65f, .54f, 1f, 1f);
-                    colors.pressedColor = new Color(.49f, .38f, .77f, 1f);
+                    colors.highlightedColor = new Color(0.730f, 0.730f, 0.730f, 1f);
+                    colors.pressedColor = new Color(0.547f, 0.547f, 0.547f, 1f);
                     button.colors = colors;
                     string destination = label == "Masterclient" ? "Master" :
                         label == "Help And Safety" ? "Safety" :
@@ -381,7 +392,7 @@ namespace Volas
                         label;
                     button.onClick.AddListener(() => Navigate(destination));
                     MakeText(highlight.rectTransform, label, 7f, 8f, 223f, 22f,
-                        12, new Color(.53f, .52f, .61f, 1f), true);
+                        12, new Color(0.553f, 0.553f, 0.553f, 1f), true);
                     var line = MakeImage(pageRoot, "Row divider", borderColor);
                     Place(line.rectTransform, x + 2f, y + 38f, 232f, 1f);
                 }
@@ -410,7 +421,7 @@ namespace Volas
             MakeSlider(appearance, "Opacity", 15f, 73f, 206f,
                 .72f, 1f, plugin.Settings.DesktopOpacity.Value,
                 v => plugin.Settings.DesktopOpacity.Value = v);
-            MakeText(appearance, "Visual theme: charcoal / violet",
+            MakeText(appearance, "Visual theme: OLED / grayscale",
                 14f, 115f, 207f, 27f, 10, muted);
             MakeButton(appearance, "Rainbow accents",
                 plugin.RainbowTheme ? "RAINBOW ON" : "RAINBOW OFF",
@@ -422,21 +433,23 @@ namespace Volas
                 () =>
                 {
                     window.localScale = Vector3.one;
+                    window.anchoredPosition = new Vector2(55f, -55f);
                     SavePosition();
                     RedrawPage();
                 }, white, 10);
 
-            MakeText(controls, "Desktop menu: F6", 13f, 51f, 204f, 22f, 11, muted);
+            MakeText(controls, "Modern: " + plugin.Settings.DesktopShortcut.Value + " / Legacy: " + plugin.Settings.LegacyDesktopShortcut.Value, 13f, 51f, 204f, 22f, 11, muted);
             MakeText(controls, "Disable all mods: End", 13f, 85f, 204f, 22f, 11, muted);
-            MakeText(controls, "Gun: grip to aim, trigger to fire",
-                13f, 119f, 208f, 45f, 10, muted);
+            MakeButton(controls, "Legacy menu", "OPEN LEGACY IMGUI",
+                14f, 119f, 207f, 33f, panelColor,
+                () => { plugin.DesktopOpen = false; plugin.LegacyDesktopOpen = true; }, white, 10);
             MakeButton(controls, "Compact VR",
                 plugin.Compact ? "COMPACT VR ON" : "COMPACT VR OFF",
                 14f, 184f, 207f, 33f, panelColor,
                 () => { plugin.Compact = !plugin.Compact; RedrawPage(); },
                 white, 10);
             MakeButton(controls, "Gun styles", "OPEN GUN STUDIO",
-                14f, 241f, 207f, 37f, purple,
+                14f, 241f, 207f, 37f, accentGray,
                 () => Navigate("Gun Studio"), white, 11, true);
             MakeButton(controls, "Physical menu", "OPEN VR MENU / TEST",
                 14f, 288f, 207f, 33f, panelColor,
@@ -451,7 +464,7 @@ namespace Volas
             MakeText(safety, "Movement mods require solo or a recognized MODDED room.",
                 14f, 100f, 203f, 66f, 11, muted);
             MakeButton(safety, "Disable all", "PANIC / DISABLE ALL",
-                14f, 197f, 206f, 40f, new Color(.30f, .15f, .40f, .9f),
+                14f, 197f, 206f, 40f, new Color(0.283f, 0.283f, 0.283f, .9f),
                 () => { plugin.Features.DisableAll(); RedrawPage(); }, white, 11, true);
         }
 
@@ -501,7 +514,7 @@ namespace Volas
             MakeButton(panels[1], "Rainbow pointer",
                 cfg.GunRainbow.Value ? "RAINBOW GUN ON" : "RAINBOW GUN OFF",
                 14f, 178f, 208f, 36f,
-                cfg.GunRainbow.Value ? purple : panelColor,
+                cfg.GunRainbow.Value ? accentGray : panelColor,
                 () => { cfg.GunRainbow.Value = !cfg.GunRainbow.Value; RedrawPage(); },
                 white, 11);
             MakeButton(panels[1], "Glow",
@@ -535,10 +548,10 @@ namespace Volas
         {
             var rt = MakeRect(parent, title + " slider");
             Place(rt, x, y, width, 24f);
-            var track = MakeImage(rt, "Track", new Color(.13f, .12f, .18f, .9f),
+            var track = MakeImage(rt, "Track", new Color(0.143f, 0.143f, 0.143f, .9f),
                 softRounded, true);
             Place(track.rectTransform, 0f, 9f, width, 6f);
-            var fill = MakeImage(rt, "Fill", purple, softRounded, true);
+            var fill = MakeImage(rt, "Fill", accentGray, softRounded, true);
             Place(fill.rectTransform, 0f, 9f, width, 6f);
             var handle = MakeImage(rt, "Handle", white, rounded, true);
             Place(handle.rectTransform, 0f, 5f, 14f, 14f);
@@ -573,7 +586,7 @@ namespace Volas
 
             RectTransform viewport = MakeRect(leftPanel.rectTransform, "Feature scroll viewport");
             Place(viewport, 7f, 35f, 445f, 298f);
-            viewport.gameObject.AddComponent<Image>().color = new Color(0f, 0f, 0f, .001f);
+            viewport.gameObject.AddComponent<Image>().color = new Color(0.000f, 0.000f, 0.000f, .001f);
             viewport.gameObject.AddComponent<RectMask2D>();
             ScrollRect scroller = viewport.gameObject.AddComponent<ScrollRect>();
             scroller.vertical = true;
@@ -593,7 +606,7 @@ namespace Volas
                 Feature mod = matches[i];
                 float y = i * 57f;
                 var row = MakeImage(list, "Mod " + mod.Id,
-                    selected == mod ? hoverColor : new Color(.055f, .052f, .078f, .33f),
+                    selected == mod ? hoverColor : new Color(0.062f, 0.062f, 0.062f, .33f),
                     softRounded, true);
                 Place(row.rectTransform, 2f, y + 1f, 431f, 53f);
                 row.raycastTarget = true;
@@ -606,7 +619,7 @@ namespace Volas
                 });
                 if (mod.Enabled)
                 {
-                    Image activeMark = MakeImage(row.rectTransform, "Active", purple);
+                    Image activeMark = MakeImage(row.rectTransform, "Active", accentGray);
                     Place(activeMark.rectTransform, 0f, 9f, 2f, 34f);
                 }
                 MakeText(row.rectTransform, mod.Label, 12f, 5f, 272f, 20f,
@@ -619,11 +632,11 @@ namespace Volas
                     {
                         plugin.Features.ToggleFavorite(mod);
                         RedrawPage();
-                    }, plugin.Features.IsFavorite(mod) ? purple : muted, 17);
+                    }, plugin.Features.IsFavorite(mod) ? accentGray : muted, 17);
                 MakeButton(row.rectTransform, "Toggle " + mod.Id,
                     mod.ActionOnly ? "RUN" : mod.Enabled ? "ON" : "OFF",
                     353f, 13f, 63f, 28f,
-                    mod.Enabled ? purple : new Color(.11f, .10f, .16f, 1f),
+                    mod.Enabled ? accentGray : new Color(0.123f, 0.123f, 0.123f, 1f),
                     () =>
                     {
                         plugin.Features.Activate(mod);
@@ -655,12 +668,12 @@ namespace Volas
                 MakeText(container, selected.ActionOnly ? "INSTANT ACTION" :
                         selected.Enabled ? "ENABLED" : "DISABLED",
                     14f, 210f, 216f, 22f, 11,
-                    selected.Enabled ? purple : muted, true);
+                    selected.Enabled ? accentGray : muted, true);
                 MakeButton(container, "Action",
                     selected.ActionOnly ? "RUN FEATURE" :
                     selected.Enabled ? "DISABLE" : "ENABLE",
                     13f, 250f, 234f, 36f,
-                    purple, () =>
+                    accentGray, () =>
                     {
                         plugin.Features.Activate(selected);
                         RedrawPage();
@@ -671,7 +684,7 @@ namespace Volas
             {
                 MakeButton(container, "Disable all", "PANIC / DISABLE ALL",
                     13f, 294f, 234f, 32f,
-                    new Color(.17f, .10f, .22f, 1f),
+                    new Color(0.163f, 0.163f, 0.163f, 1f),
                     () =>
                     {
                         plugin.Features.DisableAll();
@@ -708,8 +721,18 @@ namespace Volas
             }
         }
 
+        private void ClampWindow()
+        {
+            Vector2 p = window.anchoredPosition;
+            Rect area = canvasRect.rect;
+            p.x = Mathf.Clamp(p.x, -window.sizeDelta.x * window.localScale.x + 160f, Mathf.Max(0f, area.width - 160f));
+            p.y = Mathf.Clamp(p.y, -Mathf.Max(0f, area.height - 42f), 0f);
+            window.anchoredPosition = p;
+        }
+
         private void SavePosition()
         {
+            ClampWindow();
             Vector2 position = window.anchoredPosition;
             plugin.Settings.WindowX.Value = position.x;
             plugin.Settings.WindowY.Value = -position.y;
@@ -846,7 +869,13 @@ namespace Volas
             Place(image.rectTransform, x, y, w, h);
             image.raycastTarget = true;
             Button button = image.gameObject.AddComponent<Button>();
-            button.transition = Selectable.Transition.None;
+            button.transition = Selectable.Transition.ColorTint;
+            ColorBlock tint = button.colors;
+            tint.normalColor = Color.white;
+            tint.highlightedColor = new Color(.88f, .88f, .88f, 1f);
+            tint.pressedColor = new Color(.70f, .70f, .70f, 1f);
+            tint.fadeDuration = .10f;
+            button.colors = tint;
             if (callback != null) button.onClick.AddListener(() => callback());
             if (!string.IsNullOrEmpty(title))
             {
@@ -872,7 +901,7 @@ namespace Volas
                     float dy = Mathf.Max(0f, Mathf.Abs(y - half) - inside);
                     float alpha = Mathf.Clamp01(radius + .5f -
                         Mathf.Sqrt(dx * dx + dy * dy));
-                    t.SetPixel(x, y, new Color(1f, 1f, 1f, alpha));
+                    t.SetPixel(x, y, new Color(1.000f, 1.000f, 1.000f, alpha));
                 }
             }
             t.Apply();
