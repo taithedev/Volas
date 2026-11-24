@@ -44,8 +44,9 @@ namespace Volas
 
         internal void Tick()
         {
-            var left = plugin.Game.LeftHand;
-            var right = plugin.Game.RightHand;
+            bool hands = Orbs || RainbowOrbs || Trails || HandLights;
+            var left = hands ? plugin.Game.LeftHand : null;
+            var right = hands || Laser ? plugin.Game.RightHand : null;
             var accent = plugin.Accent;
 
             if ((Orbs || RainbowOrbs) && left != null && right != null)
@@ -77,8 +78,8 @@ namespace Volas
             {
                 if (leftLightObject == null) leftLightObject = LightObject("Left palm light", left);
                 if (rightLightObject == null) rightLightObject = LightObject("Right palm light", right);
-                leftLightObject.transform.SetParent(left, false);
-                rightLightObject.transform.SetParent(right, false);
+                if (leftLightObject.transform.parent != left) leftLightObject.transform.SetParent(left, false);
+                if (rightLightObject.transform.parent != right) rightLightObject.transform.SetParent(right, false);
                 leftLightObject.GetComponent<Light>().color = accent;
                 rightLightObject.GetComponent<Light>().color = accent;
             }
@@ -96,7 +97,7 @@ namespace Volas
             }
             else DestroyLine(ref beam);
 
-            var head = plugin.Game.HeadCamera;
+            var head = Halo || FpsHud || ClockHud || PositionHud || HeadingHud ? plugin.Game.HeadCamera : null;
             if (Halo && head != null)
             {
                 if (headRing == null) headRing = Line("Volas head halo", 48, 0.012f, true);
@@ -137,7 +138,7 @@ namespace Volas
             for (int i = path.Count - 1; i >= 0; i--)
             {
                 if (Time.time < path[i].Expires && path.Count <= 50) continue;
-                if (path[i].Object != null) UnityEngine.Object.Destroy(path[i].Object);
+                DestroyObject(ref path[i].Object);
                 path.RemoveAt(i);
             }
         }
@@ -187,7 +188,7 @@ namespace Volas
             go.transform.localScale = Vector3.one * diameter;
             var collider = go.GetComponent<Collider>();
             if (collider != null) collider.enabled = false;
-            go.GetComponent<Renderer>().material = NewMaterial(Color.white);
+            go.GetComponent<Renderer>().sharedMaterial = NewMaterial(Color.white);
             return go;
         }
 
@@ -196,7 +197,7 @@ namespace Volas
             var go = new GameObject(name);
             go.transform.SetParent(parent, false);
             var trail = go.AddComponent<TrailRenderer>();
-            trail.material = NewMaterial(Color.white);
+            trail.sharedMaterial = NewMaterial(Color.white);
             trail.time = 0.7f;
             trail.startWidth = 0.025f;
             trail.endWidth = 0.001f;
@@ -226,7 +227,7 @@ namespace Volas
             lr.loop = loop;
             lr.startWidth = width;
             lr.endWidth = width;
-            lr.material = NewMaterial(Color.white);
+            lr.sharedMaterial = NewMaterial(Color.white);
             return lr;
         }
 
@@ -241,12 +242,14 @@ namespace Volas
         private static void Tint(GameObject obj, Color color)
         {
             var renderer = obj.GetComponent<Renderer>();
-            if (renderer != null) renderer.material.color = color;
+            if (renderer != null && renderer.sharedMaterial != null) renderer.sharedMaterial.color = color;
         }
 
         private static void DestroyObject(ref GameObject obj)
         {
             if (obj == null) return;
+            var renderer = obj.GetComponent<Renderer>();
+            if (renderer != null && renderer.sharedMaterial != null) UnityEngine.Object.Destroy(renderer.sharedMaterial);
             UnityEngine.Object.Destroy(obj);
             obj = null;
         }
@@ -254,6 +257,7 @@ namespace Volas
         private static void DestroyLine(ref LineRenderer line)
         {
             if (line == null) return;
+            if (line.sharedMaterial != null) UnityEngine.Object.Destroy(line.sharedMaterial);
             UnityEngine.Object.Destroy(line.gameObject);
             line = null;
         }
@@ -261,7 +265,7 @@ namespace Volas
         private void ClearPath()
         {
             foreach (var item in path)
-                if (item.Object != null) UnityEngine.Object.Destroy(item.Object);
+                DestroyObject(ref item.Object);
             path.Clear();
             hasPathPos = false;
         }

@@ -158,10 +158,11 @@ namespace Volas
 
         internal void Tick()
         {
+            bool? roomAllowed = null;
             foreach (var f in All)
             {
                 if (!f.Enabled) continue;
-                if (f.NeedsModdedRoom && !plugin.Game.IsSoloOrModdedRoom())
+                if (f.NeedsModdedRoom && !(roomAllowed ?? (roomAllowed = plugin.Game.IsSoloOrModdedRoom()).Value))
                 {
                     Disable(f);
                     continue;
@@ -173,10 +174,11 @@ namespace Volas
 
         internal void FixedTick()
         {
+            bool? roomAllowed = null;
             foreach (var f in All)
             {
                 if (!f.Enabled) continue;
-                if (f.NeedsModdedRoom && !plugin.Game.IsSoloOrModdedRoom())
+                if (f.NeedsModdedRoom && !(roomAllowed ?? (roomAllowed = plugin.Game.IsSoloOrModdedRoom()).Value))
                 {
                     Disable(f);
                     continue;

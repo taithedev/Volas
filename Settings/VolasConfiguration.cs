@@ -19,6 +19,10 @@ namespace Volas
         internal readonly ConfigEntry<float> AccentHue;
         internal readonly ConfigEntry<float> VrScale;
         internal readonly ConfigEntry<float> DesktopOpacity;
+        internal readonly ConfigEntry<float> MarkerRange;
+        internal readonly ConfigEntry<float> MarkerRefresh;
+        internal readonly ConfigEntry<int> MarkerLimit;
+        internal readonly ConfigEntry<float> MarkerWidth;
         internal readonly ConfigEntry<float> VrOffsetX;
         internal readonly ConfigEntry<float> VrOffsetY;
         internal readonly ConfigEntry<float> VrOffsetZ;
@@ -70,6 +74,10 @@ namespace Volas
             DesktopOpacity = config.Bind("Appearance", "Desktop opacity", 0.91f,
                 new ConfigDescription("Black glass background opacity.",
                     new AcceptableValueRange<float>(0.72f, 1f)));
+            MarkerRange = config.Bind("Player ESP", "Range", 25f, new ConfigDescription("Maximum marker distance in meters.", new AcceptableValueRange<float>(5f, 60f)));
+            MarkerRefresh = config.Bind("Player ESP", "Refresh seconds", .20f, new ConfigDescription("Distance label and range refresh interval.", new AcceptableValueRange<float>(.10f, .75f)));
+            MarkerLimit = config.Bind("Player ESP", "Marker limit", 8, new ConfigDescription("Maximum remote markers.", new AcceptableValueRange<int>(1, 12)));
+            MarkerWidth = config.Bind("Player ESP", "Line width", .012f, new ConfigDescription("Box line width in meters.", new AcceptableValueRange<float>(.005f, .04f)));
             VrScale = config.Bind("Appearance", "VR menu scale", 1f,
                 new ConfigDescription("Physical VR menu size multiplier.",
                     new AcceptableValueRange<float>(0.65f, 1.30f)));

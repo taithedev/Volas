@@ -354,6 +354,8 @@ namespace Volas
                 DrawHome();
             else if (string.IsNullOrEmpty(currentQuery) && currentPage == "Settings")
                 DrawSettingsPage();
+            else if (string.IsNullOrEmpty(currentQuery) && currentPage == "Player ESP")
+                DrawMarkerSettings();
             else if (string.IsNullOrEmpty(currentQuery) && currentPage == "Gun Studio")
                 DrawGunStudio();
             else
@@ -463,9 +465,25 @@ namespace Volas
                 14f, 48f, 203f, 42f, 11, muted);
             MakeText(safety, "Movement mods require solo or a recognized MODDED room.",
                 14f, 100f, 203f, 66f, 11, muted);
+            MakeButton(safety, "ESP settings", "PLAYER ESP SETTINGS", 14f, 252f, 206f, 36f, panelColor, () => Navigate("Player ESP"), white, 10, true);
             MakeButton(safety, "Disable all", "PANIC / DISABLE ALL",
                 14f, 197f, 206f, 40f, new Color(0.283f, 0.283f, 0.283f, .9f),
                 () => { plugin.Features.DisableAll(); RedrawPage(); }, white, 11, true);
+        }
+
+        private void DrawMarkerSettings()
+        {
+            MakeText(pageRoot, "Player ESP / MODDED rooms only", 12f, 5f, 680f, 28f, 15, white, true);
+            MakeText(pageRoot, "Maximum range (5–60 m)", 14f, 52f, 330f, 22f, 11, muted);
+            MakeSlider(pageRoot, "Range", 14f, 78f, 330f, 5f, 60f, plugin.Settings.MarkerRange.Value, v => plugin.Settings.MarkerRange.Value = v);
+            MakeText(pageRoot, "Refresh interval (.10–.75 s)", 14f, 122f, 330f, 22f, 11, muted);
+            MakeSlider(pageRoot, "Refresh", 14f, 148f, 330f, .10f, .75f, plugin.Settings.MarkerRefresh.Value, v => plugin.Settings.MarkerRefresh.Value = v);
+            MakeText(pageRoot, "Marker limit (1–12)", 14f, 192f, 330f, 22f, 11, muted);
+            MakeSlider(pageRoot, "Limit", 14f, 218f, 330f, 1f, 12f, plugin.Settings.MarkerLimit.Value, v => plugin.Settings.MarkerLimit.Value = Mathf.RoundToInt(v));
+            MakeText(pageRoot, "Line width (.005–.04 m)", 14f, 262f, 330f, 22f, 11, muted);
+            MakeSlider(pageRoot, "Width", 14f, 288f, 330f, .005f, .04f, plugin.Settings.MarkerWidth.Value, v => plugin.Settings.MarkerWidth.Value = v);
+            MakeButton(pageRoot, "Back", "BACK TO SETTINGS", 390f, 50f, 250f, 40f, panelColor, () => Navigate("Settings"), white, 11);
+            MakeButton(pageRoot, "Visuals", "OPEN VISUAL FEATURES", 390f, 100f, 250f, 40f, panelColor, () => Navigate("Visuals"), white, 11);
         }
 
         private void DrawGunStudio()

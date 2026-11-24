@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Reflection;
 using UnityEngine;
 using UnityEngine.XR;
@@ -10,6 +11,12 @@ namespace Volas
     internal sealed class GameBridge
     {
         private Type playerType;
+        private static readonly Dictionary<Type, Dictionary<string, MemberInfo>> memberCache = new Dictionary<Type, Dictionary<string, MemberInfo>>();
+        private static readonly string[] leftNames = { "leftControllerTransform", "leftHandTransform", "leftHand" };
+        private static readonly string[] rightNames = { "rightControllerTransform", "rightHandTransform", "rightHand" };
+        private int leftFrame = -1, rightFrame = -1;
+        private Transform cachedLeft, cachedRight;
+        private float nextCameraLookup;
         private Type photonType;
         private Type pollerType;
         private Type gorillaTaggerType;
@@ -56,6 +63,8 @@ namespace Volas
                 if (cachedCamera != null && cachedCamera.isActiveAndEnabled)
                     return cachedCamera;
 
+                if (Time.unscaledTime < nextCameraLookup) return null;
+                nextCameraLookup = Time.unscaledTime + .35f;
                 Camera candidate = Camera.main;
                 Camera[] cameras = Camera.allCameras;
                 for (int i = 0; i < cameras.Length; i++)
@@ -92,8 +101,12 @@ namespace Volas
         {
             get
             {
-                return GetTransform("leftControllerTransform", "leftHandTransform", "leftHand")
-                    ?? TryTrackedHand(XRNode.LeftHand, ref fallbackLeft);
+                if (leftFrame != Time.frameCount)
+                {
+                    leftFrame = Time.frameCount;
+                    cachedLeft = GetTransform(leftNames) ?? TryTrackedHand(XRNode.LeftHand, ref fallbackLeft);
+                }
+                return cachedLeft;
             }
         }
 
@@ -101,8 +114,12 @@ namespace Volas
         {
             get
             {
-                return GetTransform("rightControllerTransform", "rightHandTransform", "rightHand")
-                    ?? TryTrackedHand(XRNode.RightHand, ref fallbackRight);
+                if (rightFrame != Time.frameCount)
+                {
+                    rightFrame = Time.frameCount;
+                    cachedRight = GetTransform(rightNames) ?? TryTrackedHand(XRNode.RightHand, ref fallbackRight);
+                }
+                return cachedRight;
             }
         }
 
@@ -264,6 +281,12 @@ namespace Volas
             return false;
         }
 
+        internal bool IsInModdedRoom()
+        {
+            if (photonType == null || !object.Equals(GetMember(photonType, null, "InRoom"), true)) return false;
+            return IsSoloOrModdedRoom();
+        }
+
         internal bool IsSoloOrModdedRoom()
         {
             if (photonType == null) return false; // Fail closed if room state cannot be inspected.
@@ -304,7 +327,7 @@ namespace Volas
                 (count == null ? "" : " / " + count + " players");
         }
 
-        private static Type FindType(string fullName)
+        internal static Type FindType(string fullName)
         {
             foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
             {
@@ -314,16 +337,26 @@ namespace Volas
             return null;
         }
 
-        private static object GetMember(Type type, object instance, params string[] names)
+        internal static object GetMember(Type type, object instance, params string[] names)
         {
+            if (type == null) return null;
+            Dictionary<string, MemberInfo> members;
+            if (!memberCache.TryGetValue(type, out members))
+                memberCache[type] = members = new Dictionary<string, MemberInfo>(StringComparer.Ordinal);
             var flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static;
             foreach (string name in names)
             {
                 try
                 {
-                    var property = type.GetProperty(name, flags);
+                    MemberInfo member;
+                    if (!members.TryGetValue(name, out member))
+                    {
+                        member = (MemberInfo)type.GetProperty(name, flags) ?? type.GetField(name, flags);
+                        members[name] = member;
+                    }
+                    var property = member as PropertyInfo;
                     if (property != null) return property.GetValue(instance, null);
-                    var field = type.GetField(name, flags);
+                    var field = member as FieldInfo;
                     if (field != null) return field.GetValue(instance);
                 }
                 catch { }

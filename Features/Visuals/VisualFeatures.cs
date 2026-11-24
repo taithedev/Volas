@@ -7,6 +7,8 @@ namespace Volas
     {
         internal static void Register(FeatureRegistry registry)
         {
+            registry.Add(new Feature("marker_boxes", "Visuals", "Player ESP boxes", "Depth-tested player markers in recognized MODDED rooms only.", p => p.Markers.Boxes = true, p => p.Markers.Boxes = false, needsModdedRoom: true));
+            registry.Add(new Feature("marker_labels", "Visuals", "Player ESP distance", "Distance labels in recognized MODDED rooms only.", p => p.Markers.Labels = true, p => p.Markers.Labels = false, needsModdedRoom: true));
             registry.Add(new Feature(
                             "orbs", "Visuals", "Hand orbs", "Render bright local orbs at both hands.",
                             p => p.Effects.Orbs = true,

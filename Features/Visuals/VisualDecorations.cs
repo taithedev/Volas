@@ -37,7 +37,7 @@ namespace Volas
                 DestroyLine(ref rightWrist);
             }
 
-            var head = plugin.Game.HeadCamera;
+            var head = HeadCrown || FloorRing || RainbowFloor ? plugin.Game.HeadCamera : null;
             if (HeadCrown && head != null)
             {
                 if (crown == null)
@@ -72,13 +72,15 @@ namespace Volas
             {
                 if (floor == null)
                     floor = NewLine("Volas floor beacon", 60, 0.018f, true);
-                Vector3 pos = plugin.Game.Body != null
-                    ? plugin.Game.Body.position + Vector3.down * 0.55f
+                var body = plugin.Game.Body;
+                Vector3 pos = body != null
+                    ? body.position + Vector3.down * 0.55f
                     : head.transform.position + Vector3.down * 1.55f;
+                floor.transform.position = pos;
                 for (int i = 0; i < 60; i++)
                 {
                     float phase = i * 2f * Mathf.PI / 60f;
-                    floor.SetPosition(i, pos + new Vector3(
+                    floor.SetPosition(i, new Vector3(
                         Mathf.Cos(phase) * 0.60f, 0f, Mathf.Sin(phase) * 0.60f));
                 }
                 floor.sharedMaterial.color = RainbowFloor
@@ -108,7 +110,7 @@ namespace Volas
             }
             if (line == null)
                 line = NewLine("Volas " + title + " neon ring", 48, 0.012f, true);
-            line.transform.SetParent(hand, false);
+            if (line.transform.parent != hand) line.transform.SetParent(hand, false);
             line.transform.localPosition = Vector3.zero;
             line.transform.localRotation = Quaternion.identity;
             float multiplier = PulsingWristRings
@@ -135,7 +137,7 @@ namespace Volas
                 if (collider != null) collider.enabled = false;
                 obj.GetComponent<Renderer>().material = NewMaterial(plugin.Accent);
             }
-            obj.transform.SetParent(hand, false);
+            if (obj.transform.parent != hand) obj.transform.SetParent(hand, false);
             obj.transform.localPosition = new Vector3(0f, 0f, 0.06f);
             obj.transform.localRotation = Quaternion.Euler(
                 Time.unscaledTime * 38f, Time.unscaledTime * 66f, Time.unscaledTime * 22f);

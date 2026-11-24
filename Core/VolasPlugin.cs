@@ -15,6 +15,7 @@ namespace Volas
         internal GameBridge Game { get; private set; }
         internal FeatureRegistry Features { get; private set; }
         internal VisualEffects Effects { get; private set; }
+        internal PlayerMarkers Markers { get; private set; }
         internal ExtraVisualEffects ExtraVisuals { get; private set; }
         internal GunLib Gun { get; private set; }
         internal GunEffects Guns { get; private set; }
@@ -69,6 +70,7 @@ namespace Volas
             DesktopOpen = Settings.OpenDesktopOnLaunch.Value;
             Game = new GameBridge();
             Effects = new VisualEffects(this);
+            Markers = new PlayerMarkers(this);
             ExtraVisuals = new ExtraVisualEffects(this);
             Gun = new GunLib(this);
             Guns = new GunEffects(this);
@@ -129,6 +131,7 @@ namespace Volas
             CreativeGun.Tick();
             Movement.Tick();
             Effects.Tick();
+            Markers.Tick();
             ExtraVisuals.Tick();
             Decorations.Tick();
             // Keep VR independently operational if the optional desktop UI crashes.
@@ -240,6 +243,7 @@ namespace Volas
             if (CreativeGun != null) CreativeGun.Dispose();
             if (Decorations != null) Decorations.Dispose();
             if (Gun != null) Gun.Dispose();
+            if (Markers != null) Markers.Dispose();
             if (Effects != null) Effects.Dispose();
             if (ExtraVisuals != null) ExtraVisuals.Dispose();
             if (Vr != null) Vr.Dispose();
