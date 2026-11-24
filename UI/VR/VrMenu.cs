@@ -106,7 +106,11 @@ namespace Volas
 
             Transform anchor = plugin.Game.LeftHand;
             Transform head = camera.transform;
-            Vector3 position;
+            // Initialize the preview pose before testing the tracked wrist. C# cannot
+            // infer definite assignment from the mutable preview flag.
+            Vector3 previewPosition = head.position + head.forward * 0.75f -
+                head.right * 0.12f - head.up * 0.01f;
+            Vector3 position = previewPosition;
             bool preview = anchor == null;
             if (!preview)
             {
@@ -124,8 +128,7 @@ namespace Volas
             {
                 // Do not silently hide the entire menu when a hand transform is
                 // unavailable or outside the view. Show a head-anchored preview.
-                position = head.position + head.forward * 0.75f -
-                    head.right * 0.12f - head.up * 0.01f;
+                position = previewPosition;
                 Status = anchor == null
                     ? "Head preview: left controller pose unavailable"
                     : "Head preview: left controller is outside view";

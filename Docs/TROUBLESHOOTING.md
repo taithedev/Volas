@@ -6,6 +6,10 @@ Your screenshot shows **Solution Explorer — Folder View**. In Visual Studio ch
 
 You can also simply run `build.bat` from the repository. For auto-install use `build.bat -Install`. The helper stores the game directory in `Volas.Local.props` (not committed to Git) so future Visual Studio builds can find it.
 
+## CS0165: Use of unassigned local variable 'position'
+
+The physical menu now initializes its camera-relative fallback position before evaluating controller tracking. This resolves the definite-assignment error without changing the normal wrist pose.
+
 ## CS0012: MonoBehaviour is defined in an assembly that is not referenced
 
 This is **not caused by the presence or absence of `src/`**. It means the compiler cannot resolve a required Unity assembly reference or is mixing incompatible Unity/BepInEx runtime assemblies.
@@ -20,7 +24,7 @@ Try these in order:
 4. If automatic targeting fails, run `build.bat -Framework netstandard2.1`; alternatively `build.bat -Framework net472` if compatible.
 5. In Visual Studio **Build → Clean Solution**, then **Rebuild Solution**. You may delete `bin/` and `obj/` if they contain stale outputs.
 6. Run `powershell -ExecutionPolicy Bypass -File .\\Build\\Diagnose-References.ps1 -GamePath "FULL_PATH_TO_GAME"` to see which **UnityEngine.dll** and uGUI DLLs exist.
-7. Read the **full first CS0012 line** in Output; its named assembly is the exact dependency that must be reconciled. When the error says `UnityEngine, Version=0.0.0.0`, use a UnityEngine.dll facade from the **same compatible game/BepInEx environment**, not a random Unity version. You can supply `-UnityEngineFacadePath "FULL_PATH_TO_UnityEngine.dll"` to `Build/Build-Volas.ps1`; the path is saved to `Volas.Local.props`.
+7. Read the **full first CS0012 line** in Output; its named assembly is the exact dependency that must be reconciled. When the error says `UnityEngine, Version=0.0.0.0`, use a UnityEngine.dll facade from the **same compatible game/BepInEx environment**, not a random Unity version. You can supply `build.bat -UnityEngineFacadePath "FULL_PATH_TO_UnityEngine.dll"`; the root wrapper now forwards this argument and persists it in `Volas.Local.props`. The build checks the DLL assembly identity, reports the BepInEx expected UnityEngine identity when available, and stops early if the facade is missing rather than producing repeated CS0012 errors.
 
 The script tries both supported target frameworks automatically unless you force one. A failed local build cannot be diagnosed completely from a truncated error line.
 

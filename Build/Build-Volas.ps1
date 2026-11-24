@@ -14,6 +14,14 @@ function Test-GorillaTag([string]$path) {
 }
 function Find-GorillaTag {
     $steamRoots = New-Object 'System.Collections.Generic.List[string]'
+    foreach ($key in @("HKCU:\Software\Valve\Steam", "HKLM:\SOFTWARE\WOW6432Node\Valve\Steam", "HKLM:\SOFTWARE\Valve\Steam")) {
+        $steam = Get-ItemProperty -LiteralPath $key -ErrorAction SilentlyContinue
+        if ($steam) {
+            foreach ($value in @($steam.SteamPath, $steam.InstallPath)) {
+                if ($value) { $steamRoots.Add([string]$value) }
+            }
+        }
+    }
     foreach ($path in @([Environment]::GetFolderPath("ProgramFilesX86"), [Environment]::GetFolderPath("ProgramFiles"))) {
         if ($path) { $steamRoots.Add((Join-Path $path "Steam")) }
     }
@@ -37,8 +45,17 @@ function Find-GorillaTag {
     }
     return $null
 }
+$localProps = Join-Path $projectRoot "Volas.Local.props"
+$previous = $null
+if (Test-Path -LiteralPath $localProps) {
+    try { $previous = ([xml](Get-Content -LiteralPath $localProps -Raw)).Project.PropertyGroup }
+    catch { Write-Warning "Ignoring unreadable Volas.Local.props." }
+}
 $selected = $GamePath
 if (-not $selected) { $selected = $env:VOLAS_GAME_DIR }
+if (-not $selected -and $previous -and (Test-GorillaTag ([string]$previous.GorillaTagDir))) {
+    $selected = [string]$previous.GorillaTagDir
+}
 if (-not $selected) { $selected = Find-GorillaTag }
 if (-not (Test-GorillaTag $selected)) {
     throw "Gorilla Tag was not found. Run build.bat -GamePath 'D:\SteamLibrary\steamapps\common\Gorilla Tag' (replace with your actual directory)."
@@ -69,14 +86,36 @@ if (-not $UnityEngineFacadePath) {
         }
     }
 }
+if (-not $UnityEngineFacadePath -and $previous -and $previous.UnityEngineFacadePath -and
+    [string]$previous.GorillaTagDir -eq $selected -and
+    (Test-Path -LiteralPath ([string]$previous.UnityEngineFacadePath))) {
+    $UnityEngineFacadePath = [string]$previous.UnityEngineFacadePath
+}
 if ($UnityEngineFacadePath) {
     if (-not (Test-Path -LiteralPath $UnityEngineFacadePath)) {
         throw "UnityEngine.dll facade was not found at: $UnityEngineFacadePath"
     }
     $UnityEngineFacadePath = (Resolve-Path -LiteralPath $UnityEngineFacadePath).Path
+    $identity = [System.Reflection.AssemblyName]::GetAssemblyName($UnityEngineFacadePath)
+    if ($identity.Name -ne "UnityEngine") {
+        throw "Wrong Unity assembly: $($identity.FullName). Supply the matching UnityEngine.dll, not CoreModule."
+    }
     Write-Host "UnityEngine.dll facade: $UnityEngineFacadePath"
+    Write-Host "Facade identity: $($identity.FullName)"
 } else {
-    Write-Warning "No UnityEngine.dll facade found. If CS0012 mentions UnityEngine MonoBehaviour, ensure your BepInEx version matches the installed game and see Docs/TROUBLESHOOTING.md."
+    throw "Missing UnityEngine.dll. Verify the game files and matching BepInEx installation, or supply -UnityEngineFacadePath with the compatible UnityEngine.dll. No DLL was fabricated or downloaded."
+}
+try {
+    $loader = [System.Reflection.Assembly]::ReflectionOnlyLoadFrom($bepinex)
+    $expected = @($loader.GetReferencedAssemblies() | Where-Object { $_.Name -eq "UnityEngine" })
+    foreach ($reference in $expected) {
+        Write-Host "BepInEx expects: $($reference.FullName)"
+        if ($reference.Version -ne $identity.Version) {
+            Write-Warning "BepInEx and the selected UnityEngine.dll have different assembly versions. Check that they belong to the same compatible installation."
+        }
+    }
+} catch {
+    Write-Verbose "BepInEx reference inspection unavailable: $_"
 }
 if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
     throw "Missing .NET SDK. Install .NET SDK or Visual Studio .NET desktop development."
@@ -111,7 +150,7 @@ foreach ($candidate in $candidates) {
     Write-Host "Trying target framework: $candidate" -ForegroundColor Cyan
     $argsList = @(
         "build", (Join-Path $projectRoot "Volas.sln"), "-c", "Release",
-        "--nologo", "-p:GorillaTagDir=$selected",
+        "--nologo", "--no-incremental", "-p:GorillaTagDir=$selected",
         "-p:VolasTargetFramework=$candidate"
     )
     if ($UnityEngineFacadePath) { $argsList += "-p:UnityEngineFacadePath=$UnityEngineFacadePath" }

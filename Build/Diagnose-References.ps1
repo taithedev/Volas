@@ -43,8 +43,17 @@ $facadeCandidates = @(
 $foundFacade = @($facadeCandidates | Where-Object { Test-Path -LiteralPath $_ })
 if ($foundFacade.Count -gt 0) {
     Write-Host "UnityEngine.dll facade candidates:" -ForegroundColor Green
-    $foundFacade | ForEach-Object { Write-Host "  $_" }
+    $foundFacade | ForEach-Object {
+        Write-Host "  $_"
+        try { Write-Host "    $([System.Reflection.AssemblyName]::GetAssemblyName($_).FullName)" }
+        catch { Write-Warning "    Not a readable managed assembly: $_" }
+    }
 } else {
     Write-Warning "No UnityEngine.dll facade found in game/BepInEx directories. Older BepInEx assemblies referencing UnityEngine can cause CS0012 MonoBehaviour errors. Use matching BepInEx and Unity assemblies; do not download arbitrary UnityEngine.dll files."
 }
+try {
+    $loader = [System.Reflection.Assembly]::ReflectionOnlyLoadFrom((Join-Path $core "BepInEx.dll"))
+    $loader.GetReferencedAssemblies() | Where-Object { $_.Name -like "UnityEngine*" } |
+        ForEach-Object { Write-Host "BepInEx expects: $($_.FullName)" }
+} catch { Write-Warning "Could not inspect BepInEx references: $_" }
 Write-Host "If this still fails: paste the FIRST full CS error and the exact referenced assembly name."

@@ -6,6 +6,7 @@
     <GorillaTagDir Condition="'$(GorillaTagDir)' == ''">C:\Program Files (x86)\Steam\steamapps\common\Gorilla Tag</GorillaTagDir>
     <ManagedDir>$(GorillaTagDir)\Gorilla Tag_Data\Managed</ManagedDir>
     <BepInExDir>$(GorillaTagDir)\BepInEx\core</BepInExDir>
+    <UnityEngineFacadePath Condition="'$(UnityEngineFacadePath)' == '' and '$(VOLAS_UNITYENGINE_DLL)' != ''">$(VOLAS_UNITYENGINE_DLL)</UnityEngineFacadePath>
     <UnityEngineFacadePath Condition="'$(UnityEngineFacadePath)' == '' and Exists('$(ManagedDir)\UnityEngine.dll')">$(ManagedDir)\UnityEngine.dll</UnityEngineFacadePath>
     <UnityEngineFacadePath Condition="'$(UnityEngineFacadePath)' == '' and Exists('$(BepInExDir)\UnityEngine.dll')">$(BepInExDir)\UnityEngine.dll</UnityEngineFacadePath>
     <UnityEngineFacadePath Condition="'$(UnityEngineFacadePath)' == '' and Exists('$(GorillaTagDir)\BepInEx\plugins\UnityEngine.dll')">$(GorillaTagDir)\BepInEx\plugins\UnityEngine.dll</UnityEngineFacadePath>
@@ -47,8 +48,9 @@
     <!-- Resolve UnityEngine.dll explicitly. BepInEx builds that reference the
          UnityEngine facade produce repeated CS0012 MonoBehaviour errors if it
          is silently omitted by a conditional reference. -->
-    <Reference Include="UnityEngine" Condition="'$(UnityEngineFacadePath)' != ''">
-      <HintPath>$(UnityEngineFacadePath)</HintPath>
+    <Reference Include="UnityEngine">
+      <HintPath Condition="'$(UnityEngineFacadePath)' != ''">$(UnityEngineFacadePath)</HintPath>
+      <HintPath Condition="'$(UnityEngineFacadePath)' == ''">$(ManagedDir)\UnityEngine.dll</HintPath>
       <Private>false</Private>
       <SpecificVersion>false</SpecificVersion>
     </Reference>
@@ -88,9 +90,11 @@
     </Reference>
   </ItemGroup>
 
-  <Target Name="ValidateVolasReferences" BeforeTargets="ResolveReferences">
+  <Target Name="ValidateVolasReferences" BeforeTargets="ResolveAssemblyReferences" Condition="'$(DesignTimeBuild)' != 'true'">
     <Message Importance="high" Text="Volas compiling $(TargetFramework) against: $(ManagedDir)" />
     <Message Importance="high" Text="UnityEngine.dll facade: $(UnityEngineFacadePath)" />
+    <Error Condition="'$(UnityEngineFacadePath)' == ''"
+           Text="Volas: UnityEngine.dll was not found. Run build.bat -GamePath &quot;YOUR_GAME_PATH&quot; or supply -UnityEngineFacadePath with the matching UnityEngine.dll. CoreModule alone does not resolve CS0012 for older BepInEx." />
     <Error Condition="'$(UnityEngineFacadePath)' != '' and !Exists('$(UnityEngineFacadePath)')"
            Text="Volas: UnityEngineFacadePath points to a missing DLL: $(UnityEngineFacadePath)" />
     <Error Condition="!Exists('$(ManagedDir)\UnityEngine.CoreModule.dll')"
