@@ -18,6 +18,9 @@ namespace Volas
         internal readonly ConfigEntry<bool> RainbowAccent;
         internal readonly ConfigEntry<float> AccentHue;
         internal readonly ConfigEntry<float> VrScale;
+        internal readonly ConfigEntry<float> VrTextScale;
+        internal readonly ConfigEntry<bool> VrPointerRay;
+        internal readonly ConfigEntry<bool> VrNotifications;
         internal readonly ConfigEntry<float> DesktopOpacity;
         internal readonly ConfigEntry<float> MarkerRange;
         internal readonly ConfigEntry<float> MarkerRefresh;
@@ -81,6 +84,9 @@ namespace Volas
             VrScale = config.Bind("Appearance", "VR menu scale", 1f,
                 new ConfigDescription("Physical VR menu size multiplier.",
                     new AcceptableValueRange<float>(0.65f, 1.30f)));
+            VrTextScale = config.Bind("VR Menu", "Text scale", 1f, new ConfigDescription("Wrist text multiplier.", new AcceptableValueRange<float>(.85f, 1.25f)));
+            VrPointerRay = config.Bind("VR Menu", "Pointer ray", true, "Draw a controller selection ray.");
+            VrNotifications = config.Bind("VR Menu", "Notifications", true, "Show temporary wrist feedback.");
             VrOffsetX = config.Bind("VR Menu", "Offset X", 0f,
                 new ConfigDescription("Wrist tablet horizontal position in meters.",
                     new AcceptableValueRange<float>(-0.24f, 0.24f)));

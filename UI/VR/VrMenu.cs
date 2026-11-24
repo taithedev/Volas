@@ -1,67 +1,53 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI;
 using UnityEngine.XR;
 
 namespace Volas
 {
-    /// <summary>
-    /// A physical left-hand VR menu. Real raised 3D button surfaces with
-    /// right-hand proximity touch, controller ray selection and haptics.
-    /// No IMGUI, prefabs, scene edits or network actions.
-    /// </summary>
+    // A compact wrist interface with a persistent world-space canvas.
+    // UI and interaction use the same local coordinate system.
     internal sealed class VrMenu
     {
-        private const int ItemsPerPage = 6;
-        private const float ButtonPlane = 0.049f;
-        private const float TouchPlane = 0.057f;
-
+        private const float Unit = .0005f;
+        private const float Width = 480f, Height = 640f;
+        private const int PerPage = 4;
         private readonly VolasPlugin plugin;
-        private readonly List<PhysicalButton> buttons = new List<PhysicalButton>();
-        private readonly List<string> categories = new List<string>();
-        private readonly List<InputDevice> rightControllerCandidates = new List<InputDevice>(4);
-        private readonly List<Mesh> frameMeshes = new List<Mesh>();
-        private readonly List<Mesh> buttonMeshes = new List<Mesh>();
-        private float nextMissingCameraLog;
+        private readonly List<Slot> slots = new List<Slot>(16);
+        private readonly List<InputDevice> devices = new List<InputDevice>(4);
+        private readonly List<Text> labels = new List<Text>();
+        private readonly List<int> fontSizes = new List<int>();
+        private readonly Slot[] rows = new Slot[PerPage], favorites = new Slot[PerPage];
+        private Slot home, saved, enabled, all, previous, next;
+        private GameObject root, dot;
+        private RectTransform panel;
+        private LineRenderer beam;
+        private Material pointerMaterial;
+        private Font font;
+        private Text heading, pageLabel, feedback, fps;
+        private int page, pageCount = 1, revision = -1, hovered = -1;
+        private bool dirty = true, wasOpen, oldTrigger, touchReady;
+        private float nextPress, nextStats, messageUntil, lastFontScale = -1f;
+        private string category = "", message = "";
+        private enum Mode { Home, Category, Saved, Enabled, All }
+        private Mode mode;
         internal string Status { get; private set; } = "VR menu ready";
-        private GameObject root;
-        private Transform content;
-        private GameObject pointerDot;
-        private LineRenderer pointerBeam;
-        private Material deepBlack;
-        private Material body;
-        private Material buttonRest;
-        private Material buttonHover;
-        private Material active;
-        private Material activeHover;
-        private Material accent;
-        private Material gray;
-        private Material light;
-        private Material buttonOutline;
 
-        private enum ScreenMode { Categories, Features, Favorites, Enabled, All }
-        private ScreenMode screen = ScreenMode.Categories;
-        private string currentCategory = "";
-        private int page;
-        private int displayedRevision = -1;
-        private bool firstPosition = true;
-        private bool previousTrigger;
-        private bool touchArmed = true;
-        private int hovered = -1;
-        private float nextPressAt;
-        private float lastPulseAt;
-        private bool wasOpen;
+        private static readonly Color Black = new Color32(10,10,12,255);
+        private static readonly Color Surface = new Color32(35,35,39,255);
+        private static readonly Color Gray = new Color32(66,66,72,255);
+        private static readonly Color White = new Color32(248,248,250,255);
+        private static readonly Color Muted = new Color32(181,181,190,255);
+        private static readonly Color Ink = new Color32(15,15,18,255);
 
-        private sealed class PhysicalButton
+        private sealed class Slot
         {
-            internal float X;
-            internal float Y;
-            internal float Width;
-            internal float Height;
+            internal Rect Area;
+            internal Image Image;
+            internal Text Text;
             internal Action Action;
-            internal Renderer Renderer;
-            internal Material Normal;
-            internal Material Hovered;
+            internal bool Selected, Available;
         }
 
         internal VrMenu(VolasPlugin owner) { plugin = owner; }
@@ -70,742 +56,342 @@ namespace Volas
         {
             if (!plugin.VrOpen)
             {
-                if (root != null) root.SetActive(false);
-                HidePointer();
-                if (wasOpen)
-                {
-                    previousTrigger = false;
-                    touchArmed = false;
-                    firstPosition = true;
-                    wasOpen = false;
-                    hovered = -1;
-                }
-                Status = "Closed - left Y, F7, or PC settings";
+                if (root != null && root.activeSelf) root.SetActive(false);
+                if (wasOpen) { HidePointer(); dirty = true; wasOpen = false; hovered = -1; }
+                Status = "Closed | Y or F7";
                 return;
             }
-
             Camera camera = plugin.Game.HeadCamera;
             if (camera == null)
             {
-                Status = "Cannot display VR menu: no active headset/game camera";
                 if (root != null) root.SetActive(false);
-                if (Time.unscaledTime >= nextMissingCameraLog)
-                {
-                    nextMissingCameraLog = Time.unscaledTime + 8f;
-                    plugin.Log.LogWarning("Volas VR menu is open but no camera is available. Check your headset and game camera.");
-                }
+                wasOpen = false;
+                Status = "Waiting for camera";
                 return;
             }
-
-            if (root == null && !CreateMenu())
-            {
-                Status = "VR menu material initialization failed - check BepInEx log";
-                return;
-            }
-            root.SetActive(true);
-
-            Transform anchor = plugin.Game.LeftHand;
+            if (root == null) Create();
             Transform head = camera.transform;
-            // Initialize the preview pose before testing the tracked wrist. C# cannot
-            // infer definite assignment from the mutable preview flag.
-            Vector3 previewPosition = head.position + head.forward * 0.75f -
-                head.right * 0.12f - head.up * 0.01f;
-            Vector3 position = previewPosition;
-            bool preview = anchor == null;
-            if (!preview)
+            Transform left = plugin.Game.LeftHand;
+            Vector3 pos = head.position + head.forward*.52f - head.right*.055f - head.up*.025f;
+            bool preview = true;
+            if (left != null)
             {
-                position = anchor.TransformPoint(new Vector3(
-                    plugin.Settings.VrOffsetX.Value,
-                    plugin.Settings.VrOffsetY.Value,
-                    plugin.Settings.VrOffsetZ.Value));
-                Vector3 offset = position - head.position;
-                if (offset.sqrMagnitude < Mathf.Pow(Mathf.Max(.30f, camera.nearClipPlane + .1f), 2f) ||
-                    offset.sqrMagnitude > 2.0f ||
-                    Vector3.Dot(head.forward, offset.normalized) < -0.18f)
-                    preview = true;
+                Vector3 candidate = left.TransformPoint(new Vector3(plugin.Settings.VrOffsetX.Value,
+                    plugin.Settings.VrOffsetY.Value, plugin.Settings.VrOffsetZ.Value));
+                Vector3 d = candidate-head.position;
+                if (d.sqrMagnitude >= .24f*.24f && d.sqrMagnitude < 1.8f*1.8f &&
+                    Vector3.Dot(head.forward,d.normalized) >= .12f)
+                { pos = candidate; preview = false; }
             }
-            if (preview)
-            {
-                // Do not silently hide the entire menu when a hand transform is
-                // unavailable or outside the view. Show a head-anchored preview.
-                position = previewPosition;
-                Status = anchor == null
-                    ? "Head preview: left controller pose unavailable"
-                    : "Head preview: left controller is outside view";
-            }
-            else
-            {
-                Status = "Physical wrist menu active";
-            }
+            // Canvas front is -Z; point +Z away from the viewer to avoid reversed labels.
+            Vector3 facing = pos-head.position;
+            root.transform.SetPositionAndRotation(pos, facing.sqrMagnitude > .0001f ?
+                Quaternion.LookRotation(facing.normalized,head.up) : head.rotation);
+            root.transform.localScale = Vector3.one * plugin.Settings.VrScale.Value *
+                (plugin.Compact ? .82f : 1f);
+            root.SetActive(true);
+            Status = preview ? "Camera preview" : "Wrist menu active";
 
-            Vector3 facing = head.position - position;
-            Quaternion orientation = facing.sqrMagnitude > 0.0001f
-                ? Quaternion.LookRotation(facing.normalized, head.up)
-                : head.rotation;
-            if (firstPosition)
-            {
-                root.transform.position = position;
-                root.transform.rotation = orientation;
-                firstPosition = false;
-            }
-            else
-            {
-                float t = 1f - Mathf.Exp(-24f * Time.unscaledDeltaTime);
-                root.transform.position = Vector3.Lerp(root.transform.position, position, t);
-                root.transform.rotation = Quaternion.Slerp(root.transform.rotation, orientation, t);
-            }
-
-            root.transform.localScale = Vector3.one *
-                plugin.Settings.VrScale.Value * (plugin.Compact ? 0.82f : 1f);
+            InputDevice controller = RightDevice();
+            bool trigger = ReadTrigger(controller);
+            float analog;
+            if (plugin.Game.TryControllerFloat("rightControllerIndexFloat", out analog) && analog >= .65f)
+                trigger = true;
             if (!wasOpen)
             {
-                wasOpen = true;
-                displayedRevision = -1;
-                plugin.Log.LogInfo("Volas physical menu rendered: " + Status);
+                wasOpen = true; dirty = true; oldTrigger = trigger; touchReady = false;
+                nextPress = Time.unscaledTime+.18f;
             }
-            if (displayedRevision != plugin.Features.Revision) Rebuild();
-
-            Transform rightHand = plugin.Game.RightHand;
-            InputDevice controller = GetRightController();
-            bool trigger = ReadTrigger(controller);
-            float gameTrigger;
-            if (plugin.Game.TryControllerFloat("rightControllerIndexFloat",
-                out gameTrigger) && gameTrigger >= .62f)
-                trigger = true;
-            int touched = -1;
-            bool touching = false;
-            int pointed = -1;
-            Vector3 hit = Vector3.zero;
-            bool rayHit = false;
-
-            if (rightHand != null)
+            if (dirty || revision != plugin.Features.Revision) Refresh();
+            UpdateFont();
+            if (Time.unscaledTime >= nextStats)
             {
-                Vector3 tip = root.transform.InverseTransformPoint(
-                    rightHand.TransformPoint(new Vector3(0f, -0.018f, 0.047f)));
-                bool hoverDepth = tip.z >= .005f && tip.z <= .16f;
-                touched = FindButton(tip.x, tip.y, hoverDepth);
-                // Only press when physically contacting the raised front,
-                // not merely hovering a few centimeters above it.
-                touching = touched >= 0 && tip.z <= .069f;
-                if (touched == -1 || tip.z > .105f) touchArmed = true;
-                rayHit = FindPointer(rightHand, out pointed, out hit);
+                nextStats = Time.unscaledTime+.5f;
+                fps.text = plugin.FramesPerSecond.ToString("0")+" FPS";
             }
-            else
-            {
-                touchArmed = false;
-            }
+            string text = plugin.Settings.VrNotifications.Value && Time.unscaledTime < messageUntil ?
+                message : "Touch or point + trigger";
+            if (feedback.text != text) feedback.text = text;
 
-            // In desktop preview, an ordinary mouse can click physical
-            // menu buttons. This also works when headset controllers fail.
-            int mouseTarget = -1;
-            Vector3 mouseHit;
-            bool mouseRay = FindMousePointer(camera, out mouseTarget, out mouseHit);
-            bool mouseClick = false;
-            try { mouseClick = mouseTarget >= 0 && Input.GetMouseButtonDown(0); }
-            catch (Exception) { }
-
-            if ((!rayHit || pointed == -1) && mouseRay)
+            Transform right = plugin.Game.RightHand;
+            int touched = -1, aimed = -1, mouse = -1;
+            Vector3 hit = Vector3.zero, mouseHit = Vector3.zero;
+            bool ray = false, mouseRay = false, clicked = false;
+            if (right != null)
             {
-                rayHit = true;
-                pointed = mouseTarget;
-                hit = mouseHit;
-            }
-            if (rightHand != null && rayHit)
-                UpdatePointer(rightHand, true, hit, controller);
-            else if (mouseRay)
-            {
-                if (pointerDot != null)
+                Vector3 tip = root.transform.InverseTransformPoint(right.TransformPoint(new Vector3(0f,-.018f,.047f)));
+                int candidate = Hit(tip.x/Unit,-tip.y/Unit);
+                if (tip.z >= -.025f && tip.z <= .006f) touched = candidate;
+                if (candidate < 0 || tip.z < -.045f || tip.z > .02f) touchReady = true;
+                ray = Intersect(new Ray(right.position,-right.up),1.2f,out aimed,out hit);
+                if (!ray || aimed < 0)
                 {
-                    pointerDot.SetActive(true);
-                    pointerDot.transform.position = mouseHit +
-                        root.transform.forward * .013f;
+                    int alternate; Vector3 alternateHit;
+                    if (Intersect(new Ray(right.position,right.forward),1.2f,out alternate,out alternateHit) &&
+                        (!ray || alternate >= 0))
+                    { ray = true; aimed = alternate; hit = alternateHit; }
                 }
-                if (pointerBeam != null) pointerBeam.gameObject.SetActive(false);
             }
-            else
-                HidePointer();
-
-            int selection = touched >= 0 ? touched : pointed;
-            if (mouseClick) selection = mouseTarget;
+            else touchReady = false;
+            if (preview || right == null)
+            {
+                try
+                {
+                    mouseRay = Intersect(camera.ScreenPointToRay(Input.mousePosition),4f,out mouse,out mouseHit);
+                    clicked = mouse >= 0 && Input.GetMouseButtonDown(0);
+                }
+                catch (Exception) { }
+            }
+            int selection = clicked ? mouse : touched >= 0 ? touched : aimed >= 0 ? aimed : mouse;
             SetHover(selection);
-
-            bool touchPress = touching && touchArmed;
-            bool triggerPress = pointed >= 0 && trigger && !previousTrigger;
-            previousTrigger = trigger;
-            if ((touchPress || triggerPress || mouseClick) &&
-                Time.unscaledTime >= nextPressAt)
+            if (touched >= 0 && right != null)
             {
-                int index = mouseClick ? mouseTarget :
-                    touchPress ? touched : pointed;
-                if (index >= 0 && index < buttons.Count)
-                {
-                    touchArmed = false;
-                    nextPressAt = Time.unscaledTime + .23f;
-                    Action action = buttons[index].Action;
-                    Haptic(controller);
-                    if (action != null) action();
-                    Status = "Button selected";
-                }
+                Vector2 center = slots[touched].Area.center;
+                ShowPointer(right.position,root.transform.TransformPoint(new Vector3(center.x*Unit,-center.y*Unit,0f)),false);
             }
+            else if (ray && right != null) ShowPointer(right.position,hit,plugin.Settings.VrPointerRay.Value);
+            else if (mouseRay) ShowPointer(mouseHit,mouseHit,false);
+            else HidePointer();
+
+            bool touch = touched >= 0 && touchReady;
+            bool press = aimed >= 0 && trigger && !oldTrigger;
+            oldTrigger = trigger;
+            if (!(touch || press || clicked) || Time.unscaledTime < nextPress) return;
+            int index = clicked ? mouse : touch ? touched : aimed;
+            if (index < 0 || index >= slots.Count || !slots[index].Available) return;
+            touchReady = false;
+            nextPress = Time.unscaledTime+.22f;
+            if (controller.isValid)
+                try { controller.SendHapticImpulse(0u,.22f,.045f); } catch (Exception) { }
+            slots[index].Action?.Invoke();
         }
 
-        private InputDevice GetRightController()
+        private void Create()
         {
-            InputDevice device = InputDevices.GetDeviceAtXRNode(XRNode.RightHand);
-            if (device.isValid) return device;
-            rightControllerCandidates.Clear();
-            InputDevices.GetDevicesWithCharacteristics(
-                InputDeviceCharacteristics.Right | InputDeviceCharacteristics.Controller,
-                rightControllerCandidates);
-            for (int i = 0; i < rightControllerCandidates.Count; i++)
-                if (rightControllerCandidates[i].isValid)
-                    return rightControllerCandidates[i];
-            return device;
-        }
-
-        private static bool ReadTrigger(InputDevice device)
-        {
-            if (!device.isValid) return false;
-            bool pressed;
-            if (device.TryGetFeatureValue(CommonUsages.triggerButton, out pressed) &&
-                pressed) return true;
-            float analog;
-            return device.TryGetFeatureValue(CommonUsages.trigger, out analog) &&
-                analog >= .62f;
-        }
-
-        private bool FindMousePointer(Camera camera, out int index, out Vector3 point)
-        {
-            index = -1;
-            point = Vector3.zero;
-            if (camera == null) return false;
-            try
-            {
-                return IntersectMenu(camera.ScreenPointToRay(Input.mousePosition),
-                    4.0f, out index, out point);
-            }
-            catch (Exception) { return false; }
-        }
-
-        private bool CreateMenu()
-        {
-            if (!CreateMaterials()) return false;
-            root = new GameObject("Volas physical VR menu");
+            font = RuntimeFont();
+            if (font == null) throw new InvalidOperationException("No runtime UI font found.");
+            root = new GameObject("Volas Wrist Panel");
             UnityEngine.Object.DontDestroyOnLoad(root);
-            root.transform.localScale = Vector3.one;
-
-            // Solid physical back with an OLED front, raised navigation and buttons.
-            Cube(root.transform, "Grip mount", 0f, -0.083f, -0.035f,
-                0.135f, 0.29f, 0.046f, body);
-            RoundedPlate(root.transform, "Backplate", 0f, 0f, -0.016f,
-                .508f, .806f, .039f, .031f, body, false);
-            RoundedPlate(root.transform, "Accent edge", 0f, 0f, .003f,
-                .498f, .795f, .008f, .027f, accent, false);
-            RoundedPlate(root.transform, "OLED inset", 0f, 0f, .011f,
-                .487f, .780f, .008f, .025f, deepBlack, false);
-            RoundedPlate(root.transform, "Header band", 0f, .343f, .023f,
-                .474f, .074f, .008f, .014f, body, false);
-            RoundedPlate(root.transform, "Footer band", 0f, -.345f, .024f,
-                .473f, .088f, .008f, .014f, body, false);
-
-            content = new GameObject("Volas runtime buttons and labels").transform;
-            content.SetParent(root.transform, false);
-            BuildPointer();
-            Rebuild();
-            return true;
-        }
-
-        private bool CreateMaterials()
-        {
-            if (deepBlack != null) return true;
-            Shader shader = Shader.Find("Unlit/Color") ??
-                Shader.Find("Sprites/Default") ??
-                Shader.Find("Standard");
-            if (shader == null)
+            var obj = new GameObject("World UI",typeof(RectTransform),typeof(Canvas),typeof(CanvasScaler));
+            obj.transform.SetParent(root.transform,false);
+            panel = obj.GetComponent<RectTransform>();
+            panel.sizeDelta = new Vector2(Width,Height);
+            panel.localScale = Vector3.one*Unit;
+            var canvas = obj.GetComponent<Canvas>();
+            canvas.renderMode = RenderMode.WorldSpace;
+            canvas.sortingOrder = 150;
+            obj.GetComponent<CanvasScaler>().dynamicPixelsPerUnit = 2f;
+            ImageAt(panel,0,0,Width,Height,Black);
+            ImageAt(panel,12,12,456,64,Surface);
+            TextAt(panel,"VOLAS",24,16,180,52,44,White,TextAnchor.MiddleLeft);
+            fps = TextAt(panel,"",208,18,142,48,27,Muted,TextAnchor.MiddleRight);
+            Button(364,20,92,48,"Close",()=>plugin.VrOpen=false,26);
+            home = Button(16,90,106,54,"Home",()=>Open(Mode.Home),28);
+            saved = Button(130,90,106,54,"Saved",()=>Open(Mode.Saved),28);
+            enabled = Button(244,90,106,54,"Active",()=>Open(Mode.Enabled),28);
+            all = Button(358,90,106,54,"All",()=>Open(Mode.All),28);
+            heading = TextAt(panel,"Categories",20,150,440,40,30,Muted,TextAnchor.MiddleLeft);
+            for (int i=0;i<PerPage;i++)
             {
-                plugin.Log.LogError("Volas physical menu: no supported Unity shader found.");
-                return false;
+                float y=194+i*74;
+                rows[i]=Button(16,y,368,66,"",null,36,TextAnchor.MiddleLeft);
+                favorites[i]=Button(392,y,72,66,"",null,34);
             }
-            deepBlack = CreateMaterial(shader, new Color(.018f, .015f, .028f));
-            body = CreateMaterial(shader, new Color(.055f, .047f, .072f));
-            buttonRest = CreateMaterial(shader, new Color(.105f, .094f, .14f));
-            buttonHover = CreateMaterial(shader, new Color(.25f, .17f, .35f));
-            active = CreateMaterial(shader, new Color(.47f, .23f, .81f));
-            activeHover = CreateMaterial(shader, new Color(.64f, .39f, .97f));
-            accent = CreateMaterial(shader, new Color(.40f, .19f, .74f));
-            gray = CreateMaterial(shader, new Color(.58f, .55f, .65f));
-            light = CreateMaterial(shader, new Color(.93f, .91f, .97f));
-            buttonOutline = CreateMaterial(shader, new Color(.14f, .12f, .19f));
-            return true;
-        }
+            previous=Button(16,500,112,58,"Prev",()=>Move(-1),32);
+            pageLabel=TextAt(panel,"",132,500,216,58,34,White);
+            next=Button(352,500,112,58,"Next",()=>Move(1),32);
+            ImageAt(panel,16,570,448,54,Surface);
+            feedback=TextAt(panel,"",24,574,432,46,27,White);
 
-        private static Material CreateMaterial(Shader shader, Color color)
-        {
-            var material = new Material(shader);
-            material.color = color;
-            return material;
-        }
-
-        private static Renderer Cube(Transform parent, string name,
-            float x, float y, float z, float width, float height,
-            float depth, Material material)
-        {
-            GameObject obj = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            obj.name = name;
-            obj.transform.SetParent(parent, false);
-            obj.transform.localPosition = new Vector3(x, y, z);
-            obj.transform.localRotation = Quaternion.identity;
-            obj.transform.localScale = new Vector3(width, height, depth);
-            Collider collider = obj.GetComponent<Collider>();
-            if (collider != null) collider.enabled = false;
-            Renderer renderer = obj.GetComponent<Renderer>();
-            renderer.sharedMaterial = material;
-            return renderer;
-        }
-
-        // Runtime bevel-free rounded plates: actual curved geometry instead
-        // of square Unity cubes. This needs no asset bundle or project prefab.
-        private Renderer RoundedPlate(Transform parent, string name,
-            float x, float y, float z, float width, float height,
-            float depth, float radius, Material material, bool inPage)
-        {
-            const int stepsPerCorner = 6;
-            float halfWidth = width * .5f;
-            float halfHeight = height * .5f;
-            float cornerRadius = Mathf.Min(radius, Mathf.Min(halfWidth, halfHeight) * .95f);
-            var perimeter = new List<Vector2>(4 * (stepsPerCorner + 1));
-            for (int corner = 0; corner < 4; corner++)
+            Shader shader=Shader.Find("Unlit/Color") ?? Shader.Find("Sprites/Default");
+            if (shader != null)
             {
-                float angleStart = -90f + corner * 90f;
-                float cx = corner == 0 || corner == 1
-                    ? halfWidth - cornerRadius : -halfWidth + cornerRadius;
-                float cy = corner == 1 || corner == 2
-                    ? halfHeight - cornerRadius : -halfHeight + cornerRadius;
-                for (int i = 0; i <= stepsPerCorner; i++)
-                {
-                    float angle = (angleStart + i * 90f / stepsPerCorner) *
-                        Mathf.Deg2Rad;
-                    perimeter.Add(new Vector2(cx + Mathf.Cos(angle) * cornerRadius,
-                        cy + Mathf.Sin(angle) * cornerRadius));
-                }
+                pointerMaterial=new Material(shader){color=White};
+                dot=GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                dot.transform.SetParent(root.transform,false);
+                dot.transform.localScale=Vector3.one*.007f;
+                var collider=dot.GetComponent<Collider>();
+                if (collider!=null) collider.enabled=false;
+                dot.GetComponent<Renderer>().sharedMaterial=pointerMaterial;
+                var ray=new GameObject("Selection ray");
+                ray.transform.SetParent(root.transform,false);
+                beam=ray.AddComponent<LineRenderer>();
+                beam.useWorldSpace=true;
+                beam.positionCount=2;
+                beam.startWidth=beam.endWidth=.0015f;
+                beam.sharedMaterial=pointerMaterial;
             }
+            HidePointer();
+        }
 
-            int n = perimeter.Count;
-            Vector3[] vertices = new Vector3[n * 2 + 2];
-            vertices[0] = new Vector3(0f, 0f, depth * .5f);
-            vertices[1] = new Vector3(0f, 0f, -depth * .5f);
-            for (int i = 0; i < n; i++)
+        private static Font RuntimeFont()
+        {
+            Font f=null;
+            try { f=Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"); } catch (Exception) { }
+            if (f==null) { try { f=Resources.GetBuiltinResource<Font>("Arial.ttf"); } catch (Exception) { } }
+            return f ?? Font.CreateDynamicFontFromOSFont("Arial",36);
+        }
+
+        private RectTransform RectAt(Transform parent,float x,float y,float w,float h)
+        {
+            var r=new GameObject("Wrist element",typeof(RectTransform)).GetComponent<RectTransform>();
+            r.SetParent(parent,false);
+            r.anchorMin=r.anchorMax=new Vector2(0f,1f);
+            r.pivot=new Vector2(0f,1f);
+            r.anchoredPosition=new Vector2(x,-y);
+            r.sizeDelta=new Vector2(w,h);
+            return r;
+        }
+        private Image ImageAt(Transform parent,float x,float y,float w,float h,Color color)
+        {
+            var image=RectAt(parent,x,y,w,h).gameObject.AddComponent<Image>();
+            image.color=color; image.raycastTarget=false;
+            return image;
+        }
+        private Text TextAt(Transform parent,string text,float x,float y,float w,float h,int size,Color color,
+            TextAnchor align=TextAnchor.MiddleCenter)
+        {
+            var t=RectAt(parent,x,y,w,h).gameObject.AddComponent<Text>();
+            t.font=font; t.text=text; t.fontSize=size; t.fontStyle=FontStyle.Bold;
+            t.color=color; t.alignment=align; t.raycastTarget=false; t.supportRichText=false;
+            t.resizeTextForBestFit=true; t.resizeTextMinSize=22; t.resizeTextMaxSize=size;
+            t.horizontalOverflow=HorizontalWrapMode.Wrap; t.verticalOverflow=VerticalWrapMode.Truncate;
+            labels.Add(t); fontSizes.Add(size);
+            return t;
+        }
+        private Slot Button(float x,float y,float w,float h,string caption,Action action,int size,TextAnchor align=TextAnchor.MiddleCenter)
+        {
+            var image=ImageAt(panel,x,y,w,h,Surface);
+            float inset=align==TextAnchor.MiddleLeft?14f:4f;
+            var t=TextAt(image.rectTransform,caption,inset,2,w-inset-4,h-4,size,White,align);
+            var slot=new Slot {Area=new Rect(x-Width*.5f,y-Height*.5f,w,h),Image=image,Text=t,Action=action,Available=action!=null};
+            slots.Add(slot); return slot;
+        }
+        private void Set(Slot s,string label,Action action,bool selected,bool show=true)
+        {
+            s.Action=action; s.Available=show && action!=null; s.Selected=selected;
+            s.Image.gameObject.SetActive(show);
+            if(s.Text.text!=label) s.Text.text=label;
+            Paint(s,false);
+        }
+        private static void Paint(Slot s,bool hover)
+        {
+            s.Image.color=s.Selected?White:hover?Gray:Surface;
+            s.Text.color=s.Selected?Ink:s.Available?White:Muted;
+        }
+        private void Refresh()
+        {
+            dirty=false; revision=plugin.Features.Revision; hovered=-1;
+            Set(home,"Home",()=>Open(Mode.Home),mode==Mode.Home||mode==Mode.Category);
+            Set(saved,"Saved",()=>Open(Mode.Saved),mode==Mode.Saved);
+            Set(enabled,"Active",()=>Open(Mode.Enabled),mode==Mode.Enabled);
+            Set(all,"All",()=>Open(Mode.All),mode==Mode.All);
+            List<string> categories=null; List<Feature> features=null;
+            if(mode==Mode.Home)
             {
-                vertices[2 + i] = new Vector3(perimeter[i].x, perimeter[i].y, depth * .5f);
-                vertices[2 + n + i] = new Vector3(perimeter[i].x, perimeter[i].y,
-                    -depth * .5f);
-            }
-            var triangles = new List<int>(n * 12);
-            for (int i = 0; i < n; i++)
-            {
-                int next = (i + 1) % n;
-                int fi = 2 + i;
-                int fn = 2 + next;
-                int bi = 2 + n + i;
-                int bn = 2 + n + next;
-                triangles.Add(0); triangles.Add(fi); triangles.Add(fn);
-                triangles.Add(1); triangles.Add(bn); triangles.Add(bi);
-                triangles.Add(fi); triangles.Add(bi); triangles.Add(bn);
-                triangles.Add(fi); triangles.Add(bn); triangles.Add(fn);
-            }
-            Mesh mesh = new Mesh();
-            mesh.name = "Volas rounded plate";
-            mesh.vertices = vertices;
-            mesh.triangles = triangles.ToArray();
-            mesh.RecalculateNormals();
-            mesh.RecalculateBounds();
-            if (inPage) buttonMeshes.Add(mesh);
-            else frameMeshes.Add(mesh);
-
-            GameObject go = new GameObject(name, typeof(MeshFilter), typeof(MeshRenderer));
-            go.transform.SetParent(parent, false);
-            go.transform.localPosition = new Vector3(x, y, z);
-            MeshFilter filter = go.GetComponent<MeshFilter>();
-            filter.sharedMesh = mesh;
-            MeshRenderer renderer = go.GetComponent<MeshRenderer>();
-            renderer.sharedMaterial = material;
-            return renderer;
-        }
-
-                private void BuildPointer()
-        {
-            GameObject lineObject = new GameObject("Volas menu selection ray");
-            lineObject.transform.SetParent(root.transform, false);
-            pointerBeam = lineObject.AddComponent<LineRenderer>();
-            pointerBeam.useWorldSpace = true;
-            pointerBeam.positionCount = 2;
-            pointerBeam.startWidth = 0.0025f;
-            pointerBeam.endWidth = 0.0025f;
-            pointerBeam.sharedMaterial = accent;
-            pointerBeam.startColor = new Color(1f, 1f, 1f, .55f);
-            pointerBeam.endColor = new Color(1f, 1f, 1f, .15f);
-            pointerBeam.gameObject.SetActive(false);
-
-            pointerDot = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            pointerDot.name = "Volas menu pointer dot";
-            pointerDot.transform.SetParent(root.transform, false);
-            pointerDot.transform.localScale = Vector3.one * .014f;
-            pointerDot.GetComponent<Renderer>().sharedMaterial = activeHover;
-            Collider collision = pointerDot.GetComponent<Collider>();
-            if (collision != null) collision.enabled = false;
-            pointerDot.SetActive(false);
-        }
-
-        private void UpdatePointer(Transform hand, bool visible,
-            Vector3 point, InputDevice controller)
-        {
-            if (pointerDot == null || pointerBeam == null) return;
-            // Pointer is only visible when an actual UI surface is pointed at.
-            pointerDot.SetActive(visible);
-            pointerBeam.gameObject.SetActive(visible);
-            if (!visible) return;
-            pointerDot.transform.position = point + root.transform.forward * .013f;
-            pointerBeam.SetPosition(0, hand.position);
-            pointerBeam.SetPosition(1, point);
-        }
-
-        private void HidePointer()
-        {
-            if (pointerDot != null) pointerDot.SetActive(false);
-            if (pointerBeam != null) pointerBeam.gameObject.SetActive(false);
-        }
-
-        private bool FindPointer(Transform hand, out int index, out Vector3 point)
-        {
-            index = -1;
-            point = Vector3.zero;
-            // GTAG rigs commonly aim along either -up or forward.
-            Vector3[] directions = { -hand.up, hand.forward };
-            float closest = float.MaxValue;
-            bool intersected = false;
-            for (int i = 0; i < directions.Length; i++)
-            {
-                int candidate;
-                Vector3 hit;
-                if (!IntersectMenu(new Ray(hand.position, directions[i]), .95f,
-                    out candidate, out hit)) continue;
-                float distance = Vector3.Distance(hand.position, hit);
-                if (distance >= closest) continue;
-                closest = distance;
-                point = hit;
-                index = candidate;
-                intersected = true;
-                // Prefer a ray hitting an actual button over empty panel space.
-                if (candidate >= 0) break;
-            }
-            return intersected;
-        }
-
-        private bool IntersectMenu(Ray ray, float maxDistance, out int index,
-            out Vector3 point)
-        {
-            index = -1;
-            point = Vector3.zero;
-            Plane panelPlane = new Plane(root.transform.forward,
-                root.transform.position + root.transform.forward *
-                (ButtonPlane * root.transform.localScale.z));
-            float distance;
-            if (!panelPlane.Raycast(ray, out distance) ||
-                distance < 0f || distance > maxDistance)
-                return false;
-            point = ray.GetPoint(distance);
-            Vector3 local = root.transform.InverseTransformPoint(point);
-            if (Mathf.Abs(local.x) > .242f || Mathf.Abs(local.y) > .384f)
-                return false;
-            index = FindButton(local.x, local.y, true);
-            return true;
-        }
-
-        private int FindButton(float x, float y, bool eligible)
-        {
-            if (!eligible) return -1;
-            // Newer buttons (favorites etc.) take priority over wider rows.
-            for (int i = buttons.Count - 1; i >= 0; i--)
-            {
-                PhysicalButton item = buttons[i];
-                if (Mathf.Abs(item.X - x) <= item.Width * .5f &&
-                    Mathf.Abs(item.Y - y) <= item.Height * .5f)
-                    return i;
-            }
-            return -1;
-        }
-
-        private void SetHover(int index)
-        {
-            if (hovered == index) return;
-            hovered = index;
-            for (int i = 0; i < buttons.Count; i++)
-            {
-                PhysicalButton item = buttons[i];
-                if (item.Renderer != null)
-                    item.Renderer.sharedMaterial =
-                        index == i ? item.Hovered : item.Normal;
-            }
-        }
-
-        private void Haptic(InputDevice controller)
-        {
-            if (!controller.isValid || Time.unscaledTime < lastPulseAt + .11f)
-                return;
-            lastPulseAt = Time.unscaledTime;
-            try { controller.SendHapticImpulse(0u, .26f, .055f); }
-            catch { /* Unsupported controllers still receive button input. */ }
-        }
-
-        private void Rebuild()
-        {
-            if (content == null) return;
-            for (int i = content.childCount - 1; i >= 0; i--)
-            {
-                Transform child = content.GetChild(i);
-                child.gameObject.SetActive(false);
-                UnityEngine.Object.Destroy(child.gameObject);
-            }
-            buttons.Clear();
-            for (int i = 0; i < buttonMeshes.Count; i++)
-                if (buttonMeshes[i] != null)
-                    UnityEngine.Object.Destroy(buttonMeshes[i]);
-            buttonMeshes.Clear();
-            hovered = -1;
-            UpdateCategories();
-
-            Label("VOLAS", -0.216f, 0.348f, .017f, activeHover.color, true);
-            Label("v1.4", -0.074f, 0.348f, .009f, gray.color);
-            AddButton("HOME", 0.119f, 0.348f, .092f, .048f,
-                buttonRest, () => Open(ScreenMode.Categories), true);
-            AddButton("X", .211f, .348f, .048f, .048f,
-                active, () => plugin.VrOpen = false, true);
-
-            AddButton("CATS", -0.177f, .277f, .092f, .047f,
-                screen == ScreenMode.Categories ? active : buttonRest,
-                () => Open(ScreenMode.Categories), true);
-            AddButton("FAV", -.060f, .277f, .092f, .047f,
-                screen == ScreenMode.Favorites ? active : buttonRest,
-                () => Open(ScreenMode.Favorites), true);
-            AddButton("ON", .057f, .277f, .092f, .047f,
-                screen == ScreenMode.Enabled ? active : buttonRest,
-                () => Open(ScreenMode.Enabled), true);
-            AddButton("ALL", .174f, .277f, .092f, .047f,
-                screen == ScreenMode.All ? active : buttonRest,
-                () => Open(ScreenMode.All), true);
-
-            var list = new List<Feature>();
-            int count;
-            string title;
-            if (screen == ScreenMode.Categories)
-            {
-                count = categories.Count;
-                title = "CATEGORIES";
+                categories=plugin.Features.Categories.FindAll(c=>c!="All"&&c!="Favorites");
+                heading.text="Categories";
             }
             else
             {
-                switch (screen)
-                {
-                    case ScreenMode.Favorites:
-                        title = "FAVORITES";
-                        list = plugin.Features.InCategory("Favorites");
-                        break;
-                    case ScreenMode.Enabled:
-                        title = "ENABLED";
-                        list = plugin.Features.All.FindAll(f => f.Enabled);
-                        break;
-                    case ScreenMode.All:
-                        title = "ALL MODS";
-                        list = new List<Feature>(plugin.Features.All);
-                        break;
-                    default:
-                        title = currentCategory.ToUpperInvariant();
-                        list = plugin.Features.InCategory(currentCategory);
-                        break;
-                }
-                count = list.Count;
+                if(mode==Mode.Saved) {features=plugin.Features.InCategory("Favorites");heading.text="Favorites";}
+                else if(mode==Mode.Enabled) {features=plugin.Features.All.FindAll(f=>f.Enabled);heading.text="Active features";}
+                else if(mode==Mode.All) {features=plugin.Features.All;heading.text="All features";}
+                else {features=plugin.Features.InCategory(category);heading.text=category;}
             }
-            Label(Trim(title, 16), -0.220f, .223f, .011f, gray.color);
-            Label(count.ToString() + " ENTRIES", .108f, .223f, .0085f,
-                gray.color);
-            int pages = Mathf.Max(1, Mathf.CeilToInt(count / (float)ItemsPerPage));
-            page = Mathf.Clamp(page, 0, pages - 1);
-            int first = page * ItemsPerPage;
-
-            for (int i = 0; i < ItemsPerPage && first + i < count; i++)
+            int count=categories!=null?categories.Count:features.Count;
+            pageCount=Mathf.Max(1,(count+PerPage-1)/PerPage);
+            page=Mathf.Clamp(page,0,pageCount-1);
+            pageLabel.text=(page+1)+" / "+pageCount;
+            Set(previous,"Prev",page>0?(Action)(()=>Move(-1)):null,false);
+            Set(next,"Next",page+1<pageCount?(Action)(()=>Move(1)):null,false);
+            for(int i=0;i<PerPage;i++)
             {
-                int rowIndex = first + i;
-                float y = .172f - i * .073f;
-                if (screen == ScreenMode.Categories)
+                int index=page*PerPage+i;
+                if(index>=count) {Set(rows[i],"",null,false,false);Set(favorites[i],"",null,false,false);}
+                else if(categories!=null)
                 {
-                    string name = categories[rowIndex];
-                    AddButton(Trim(name, 25), 0f, y, .434f, .063f,
-                        buttonRest, () => OpenCategory(name));
-                    Label(">", .174f, y, .015f, gray.color);
+                    string name=categories[index];
+                    Set(rows[i],name,()=>{category=name;Open(Mode.Category);},false);
+                    Set(favorites[i],">",()=>{category=name;Open(Mode.Category);},false);
                 }
                 else
                 {
-                    Feature feature = list[rowIndex];
-                    AddButton(Trim(feature.Label, 19), -.033f, y,
-                        .363f, .063f, feature.Enabled ? active : buttonRest,
-                        () => ActivateFeature(feature));
-                    if (!feature.ActionOnly)
-                        Label(feature.Enabled ? "ON" : "OFF",
-                            .090f, y, .009f,
-                            feature.Enabled ? light.color : gray.color);
-                    AddButton(plugin.Features.IsFavorite(feature) ? "*" : "+",
-                        .193f, y, .056f, .063f,
-                        plugin.Features.IsFavorite(feature) ? active : buttonRest,
-                        () => FavoriteFeature(feature), true);
+                    Feature f=features[index];bool favorite=plugin.Features.IsFavorite(f);
+                    Set(rows[i],f.Label,()=>{plugin.Features.Activate(f);Notify();},f.Enabled);
+                    Set(favorites[i],favorite?"*":"+",()=>{plugin.Features.ToggleFavorite(f);Notify();},favorite);
                 }
             }
-
-            if (count == 0)
-                Label("NO ACTIVE ENTRIES", -.204f, .072f, .012f, gray.color);
-            AddButton("<", -.182f, -.287f, .062f, .052f,
-                page > 0 ? buttonRest : body,
-                () => ChangePage(-1, pages), true);
-            Label("PAGE " + (page + 1) + " / " + pages,
-                -.118f, -.287f, .011f, light.color);
-            AddButton(">", .184f, -.287f, .062f, .052f,
-                page < pages - 1 ? buttonRest : body,
-                () => ChangePage(1, pages), true);
-
-            Label(Trim(plugin.Features.LastMessage, 28), -.222f, -.356f, .0081f,
-                gray.color);
-            AddButton("RESET", .175f, -.355f, .086f, .04f,
-                buttonRest, () =>
-                {
-                    plugin.Features.DisableAll();
-                    displayedRevision = -1;
-                }, true);
-
-            displayedRevision = plugin.Features.Revision;
+            if(count==0) Set(rows[0],"No entries",null,false);
         }
-
-        private void UpdateCategories()
+        private void Notify()
         {
-            categories.Clear();
-            foreach (string category in plugin.Features.Categories)
+            message=plugin.Features.LastMessage;messageUntil=Time.unscaledTime+3f;dirty=true;
+        }
+        private void Open(Mode m){mode=m;page=0;dirty=true;}
+        private void Move(int direction){page=Mathf.Clamp(page+direction,0,pageCount-1);dirty=true;}
+        private void UpdateFont()
+        {
+            float scale=plugin.Settings.VrTextScale.Value;
+            if(Mathf.Abs(scale-lastFontScale)<.001f)return;
+            lastFontScale=scale;
+            for(int i=0;i<labels.Count;i++)
             {
-                if (category == "Favorites" || category == "All") continue;
-                if (!categories.Contains(category)) categories.Add(category);
+                int size=Mathf.RoundToInt(fontSizes[i]*scale);
+                labels[i].fontSize=size;labels[i].resizeTextMaxSize=size;
+                labels[i].resizeTextMinSize=Mathf.Min(size,Mathf.RoundToInt(22f*scale));
             }
         }
-
-        private void Open(ScreenMode mode)
+        private int Hit(float x,float y)
         {
-            screen = mode;
-            page = 0;
-            displayedRevision = -1;
+            for(int i=slots.Count-1;i>=0;i--)
+                if(slots[i].Available&&slots[i].Area.Contains(new Vector2(x,y)))return i;
+            return -1;
         }
-
-        private void OpenCategory(string category)
+        private void SetHover(int index)
         {
-            currentCategory = category;
-            screen = ScreenMode.Features;
-            page = 0;
-            displayedRevision = -1;
+            if(hovered==index)return;
+            if(hovered>=0)Paint(slots[hovered],false);
+            hovered=index;if(index>=0)Paint(slots[index],true);
         }
-
-        private void ChangePage(int direction, int pages)
+        private bool Intersect(Ray ray,float max,out int index,out Vector3 hit)
         {
-            page = Mathf.Clamp(page + direction, 0, pages - 1);
-            displayedRevision = -1;
+            index=-1;hit=Vector3.zero;
+            Plane plane=new Plane(-root.transform.forward,root.transform.position);
+            float d;if(!plane.Raycast(ray,out d)||d<0f||d>max)return false;
+            hit=ray.GetPoint(d);Vector3 local=root.transform.InverseTransformPoint(hit);
+            float x=local.x/Unit,y=-local.y/Unit;
+            if(Mathf.Abs(x)>Width*.5f||Mathf.Abs(y)>Height*.5f)return false;
+            index=Hit(x,y);return true;
         }
-
-        private void ActivateFeature(Feature feature)
+        private void ShowPointer(Vector3 start,Vector3 end,bool line)
         {
-            plugin.Features.Activate(feature);
-            displayedRevision = -1;
+            if(dot==null||beam==null)return;
+            dot.SetActive(true);dot.transform.position=end-root.transform.forward*.004f;
+            beam.gameObject.SetActive(line);
+            if(line){beam.SetPosition(0,start);beam.SetPosition(1,end);}
         }
-
-        private void FavoriteFeature(Feature feature)
+        private void HidePointer(){if(dot!=null)dot.SetActive(false);if(beam!=null)beam.gameObject.SetActive(false);}
+        private InputDevice RightDevice()
         {
-            plugin.Features.ToggleFavorite(feature);
-            displayedRevision = -1;
+            InputDevice device=InputDevices.GetDeviceAtXRNode(XRNode.RightHand);
+            if(device.isValid)return device;
+            devices.Clear();
+            InputDevices.GetDevicesWithCharacteristics(InputDeviceCharacteristics.Right|InputDeviceCharacteristics.Controller,devices);
+            foreach(var d in devices)if(d.isValid)return d;
+            return device;
         }
-
-        private void AddButton(string caption, float x, float y,
-            float width, float height, Material material,
-            Action action, bool centerLabel = false)
+        private static bool ReadTrigger(InputDevice d)
         {
-            RoundedPlate(content, "Button border", x, y, .042f,
-                width + .003f, height + .003f, .009f, .010f,
-                buttonOutline, true);
-            Renderer renderer = RoundedPlate(content, "Button " + caption,
-                x, y, ButtonPlane, width, height, .010f, .008f,
-                material, true);
-            buttons.Add(new PhysicalButton
-            {
-                X = x, Y = y, Width = width, Height = height,
-                Action = action,
-                Renderer = renderer,
-                Normal = material,
-                Hovered = material == active ? activeHover : buttonHover
-            });
-
-            float font = height <= .051f ? .0105f : .0118f;
-            float xLabel = centerLabel ? x : x - width * .5f + .015f;
-            Color text = material == active ? light.color : light.color;
-            Label(caption, xLabel, y, font, text, centerLabel);
+            if(!d.isValid)return false;
+            bool pressed;if(d.TryGetFeatureValue(CommonUsages.triggerButton,out pressed)&&pressed)return true;
+            float v;return d.TryGetFeatureValue(CommonUsages.trigger,out v)&&v>=.65f;
         }
-
-        private void Label(string value, float x, float y, float font,
-            Color color, bool center = false)
-        {
-            GameObject go = new GameObject("UI Text " + value);
-            go.transform.SetParent(content, false);
-            go.transform.localPosition = new Vector3(x, y, .063f);
-            go.transform.localRotation = Quaternion.identity;
-            TextMesh mesh = go.AddComponent<TextMesh>();
-            mesh.text = value;
-            mesh.anchor = center ? TextAnchor.MiddleCenter : TextAnchor.MiddleLeft;
-            mesh.alignment = center ? TextAlignment.Center : TextAlignment.Left;
-            mesh.fontSize = 54;
-            mesh.characterSize = font;
-            mesh.color = color;
-        }
-
-        private static string Trim(string value, int max)
-        {
-            if (string.IsNullOrEmpty(value)) return "";
-            return value.Length <= max ? value :
-                value.Substring(0, max - 2) + "..";
-        }
-
         internal void Dispose()
         {
-            buttons.Clear();
-            for (int i = 0; i < buttonMeshes.Count; i++)
-                if (buttonMeshes[i] != null)
-                    UnityEngine.Object.Destroy(buttonMeshes[i]);
-            for (int i = 0; i < frameMeshes.Count; i++)
-                if (frameMeshes[i] != null)
-                    UnityEngine.Object.Destroy(frameMeshes[i]);
-            buttonMeshes.Clear();
-            frameMeshes.Clear();
-            if (root != null) UnityEngine.Object.Destroy(root);
-            root = null;
-            pointerDot = null;
-            pointerBeam = null;
-            Destroy(ref deepBlack);
-            Destroy(ref body);
-            Destroy(ref buttonRest);
-            Destroy(ref buttonHover);
-            Destroy(ref active);
-            Destroy(ref activeHover);
-            Destroy(ref accent);
-            Destroy(ref gray);
-            Destroy(ref light);
-            Destroy(ref buttonOutline);
-        }
-
-        private static void Destroy(ref Material material)
-        {
-            if (material == null) return;
-            UnityEngine.Object.Destroy(material);
-            material = null;
+            if(root!=null)UnityEngine.Object.Destroy(root);
+            if(pointerMaterial!=null)UnityEngine.Object.Destroy(pointerMaterial);
+            root=null;slots.Clear();labels.Clear();fontSizes.Clear();
         }
     }
 }

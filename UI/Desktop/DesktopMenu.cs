@@ -354,6 +354,8 @@ namespace Volas
                 DrawHome();
             else if (string.IsNullOrEmpty(currentQuery) && currentPage == "Settings")
                 DrawSettingsPage();
+            else if (string.IsNullOrEmpty(currentQuery) && currentPage == "Wrist Layout")
+                DrawWristLayout();
             else if (string.IsNullOrEmpty(currentQuery) && currentPage == "Player ESP")
                 DrawMarkerSettings();
             else if (string.IsNullOrEmpty(currentQuery) && currentPage == "Gun Studio")
@@ -445,6 +447,7 @@ namespace Volas
             MakeButton(controls, "Legacy menu", "OPEN LEGACY IMGUI",
                 14f, 119f, 207f, 33f, panelColor,
                 () => { plugin.DesktopOpen = false; plugin.LegacyDesktopOpen = true; }, white, 10);
+            MakeButton(appearance, "Wrist layout", "WRIST MENU SETTINGS", 14f, 255f, 207f, 37f, panelColor, () => Navigate("Wrist Layout"), white, 10, true);
             MakeButton(controls, "Compact VR",
                 plugin.Compact ? "COMPACT VR ON" : "COMPACT VR OFF",
                 14f, 184f, 207f, 33f, panelColor,
@@ -469,6 +472,24 @@ namespace Volas
             MakeButton(safety, "Disable all", "PANIC / DISABLE ALL",
                 14f, 197f, 206f, 40f, new Color(0.283f, 0.283f, 0.283f, .9f),
                 () => { plugin.Features.DisableAll(); RedrawPage(); }, white, 11, true);
+        }
+
+        private void DrawWristLayout()
+        {
+            var s = plugin.Settings;
+            MakeText(pageRoot, "Wrist layout", 12f, 4f, 680f, 30f, 15, white, true);
+            MakeText(pageRoot, "Physical size", 14f, 50f, 320f, 22f, 12, muted);
+            MakeSlider(pageRoot, "Size", 14f, 76f, 320f, .65f, 1.30f, s.VrScale.Value, v => s.VrScale.Value = v);
+            MakeText(pageRoot, "Text size", 14f, 121f, 320f, 22f, 12, muted);
+            MakeSlider(pageRoot, "Text", 14f, 147f, 320f, .85f, 1.25f, s.VrTextScale.Value, v => s.VrTextScale.Value = v);
+            MakeText(pageRoot, "Wrist height offset", 14f, 192f, 320f, 22f, 12, muted);
+            MakeSlider(pageRoot, "Height", 14f, 218f, 320f, -.24f, .24f, s.VrOffsetY.Value, v => s.VrOffsetY.Value = v);
+            MakeText(pageRoot, "Wrist depth offset", 14f, 263f, 320f, 22f, 12, muted);
+            MakeSlider(pageRoot, "Depth", 14f, 289f, 320f, .02f, .42f, s.VrOffsetZ.Value, v => s.VrOffsetZ.Value = v);
+            MakeButton(pageRoot, "Ray", "POINTER RAY: " + (s.VrPointerRay.Value ? "ON" : "OFF"), 365f, 50f, 340f, 42f, panelColor, () => { s.VrPointerRay.Value = !s.VrPointerRay.Value; RedrawPage(); }, white, 11);
+            MakeButton(pageRoot, "Notices", "NOTIFICATIONS: " + (s.VrNotifications.Value ? "ON" : "OFF"), 365f, 100f, 340f, 42f, panelColor, () => { s.VrNotifications.Value = !s.VrNotifications.Value; RedrawPage(); }, white, 11);
+            MakeButton(pageRoot, "Reset", "RESET WRIST LAYOUT", 365f, 150f, 340f, 42f, panelColor, () => { s.VrScale.Value = 1f; s.VrTextScale.Value = 1f; s.VrOffsetX.Value = 0f; s.VrOffsetY.Value = .06f; s.VrOffsetZ.Value = .16f; plugin.Compact = false; RedrawPage(); }, white, 11);
+            MakeButton(pageRoot, "Back", "BACK", 365f, 200f, 340f, 42f, panelColor, () => Navigate("Settings"), white, 11);
         }
 
         private void DrawMarkerSettings()
