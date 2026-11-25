@@ -68,3 +68,7 @@ The Community page offers optional Aurora, Pulse and Orbit cosmetics. Licensed o
 ## Volas 1.8 performance and reliability
 
 Desktop feature browsing is paged at 16 rows, including search and favorites. It renders only the visible page, preserves in-place switch updates, and shows feature descriptions and scope labels. The home dashboard shows live FPS and active feature counts. Account controls are available directly from the sidebar; the feature registry validates registrations, indexes IDs, and checks the authenticated session at activation. License input is validated locally and transient network failures use bounded retry backoff. Existing community, owner and room restrictions are preserved. No new database deployment is needed for this client-only release. Runtime compatibility is not established by these source changes.
+
+## 1.9.1 search and availability
+
+Modern and legacy menus share a ranked, multi-keyword catalog search. Search spans feature names, IDs, categories, descriptions and common aliases, with direct navigation to a matching page. The default Available Now filter hides unavailable room-dependent features while retaining local cosmetics and telemetry. All Features exposes the full catalog without changing any activation permissions. The VR Local tab includes all unrestricted features. The old unused desktop scroll fields have been removed. Existing game-room and license restrictions remain intact.

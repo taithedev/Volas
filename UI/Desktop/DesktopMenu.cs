@@ -41,8 +41,11 @@ namespace Volas
         private int featurePage, lastFeatureTotal;
         private bool featureListVisible;
         private Text featureDetail;
-        private ScrollRect featureScroll;
-        private string scrollKey = "";
+        private bool availableOnly = true;
+        private bool lastRoomAllowed;
+        private bool lastMarkerRoomAllowed;
+        private float nextAvailabilityCheck;
+        private string drawnQuery = "";
         private readonly Text hudText;
         private readonly Image crosshairH;
         private readonly Image crosshairV;
@@ -158,7 +161,7 @@ namespace Volas
             AddAccentGlow(sidebar.rectTransform, 4f, 2f, 83f, 37f, .36f);
             AddIcon(sidebar.rectTransform, "Volas", 12f, 12f, 25f, accentGray);
             MakeText(sidebar.rectTransform, "VOLAS", 43f, 8f, 98f, 24f, 16, white, true);
-            MakeText(sidebar.rectTransform, "v1.9.0", 44f, 29f, 90f, 15f, 10, muted);
+            MakeText(sidebar.rectTransform, "v1.9.1", 44f, 29f, 90f, 15f, 10, muted);
             var brandLine = MakeImage(sidebar.rectTransform, "Brand divider", borderColor);
             Place(brandLine.rectTransform, 10f, 50f, 128f, 1f);
 
@@ -269,27 +272,38 @@ namespace Volas
         {
             Image fieldImage = MakeImage(window, "Search background",
                 new Color(.055f, .063f, .089f, 1f), softRounded, true);
-            Place(fieldImage.rectTransform, 515f, 8f, 198f, 26f);
+            Place(fieldImage.rectTransform, 463f, 8f, 250f, 26f);
             AddIcon(fieldImage.rectTransform, "Search", 7f, 5f, 16f, muted);
             fieldImage.raycastTarget = true;
             searchBox = fieldImage.gameObject.AddComponent<InputField>();
             searchBox.transition = Selectable.Transition.None;
             Text fieldText = MakeText(fieldImage.rectTransform, "Input text",
-                28f, 2f, 162f, 22f, 11, white);
+                28f, 2f, 192f, 22f, 12, white);
             fieldText.supportRichText = false;
             fieldText.gameObject.name = "Search input text";
             searchBox.textComponent = fieldText;
-            Text placeholder = MakeText(fieldImage.rectTransform, "search...",
-                28f, 2f, 162f, 22f, 11, muted);
+            Text placeholder = MakeText(fieldImage.rectTransform, "Search all features...",
+                28f, 2f, 192f, 22f, 11, muted);
             placeholder.gameObject.name = "Search placeholder";
             searchBox.placeholder = placeholder;
+            searchBox.characterLimit = 100;
+            searchBox.lineType = InputField.LineType.SingleLine;
+            MakeButton(fieldImage.rectTransform,"Clear search","×",224f,1f,25f,24f,Color.clear,()=>ClearSearch(),muted,15);
             searchBox.onValueChanged.AddListener(value =>
             {
                 currentQuery = value ?? "";
+                selected = null;
                 featurePage = 0;
                 searchPending = true;
-                searchDue = Time.unscaledTime + .12f;
+                searchDue = Time.unscaledTime + .08f;
             });
+        }
+
+        private void ClearSearch()
+        {
+            currentQuery = ""; featurePage = 0; selected = null; searchPending = false;
+            if (searchBox != null) searchBox.SetTextWithoutNotify("");
+            RedrawPage();
         }
 
         private void BuildNavigation()
@@ -307,7 +321,7 @@ namespace Volas
                 if (tab == "Owner" && !plugin.Licensing.IsOwner) continue;
                 string chosen = tab;
                 string label = tab == "Custom Categories" ? "custom" : tab.ToLowerInvariant();
-                bool active = tab == currentPage;
+                bool active = tab == currentPage && string.IsNullOrWhiteSpace(currentQuery);
                 var btn = MakeButton(navigationContent, "Tab " + tab, label,
                     0f, y, 133f, 23f, active ? hoverColor : panelColor,
                     () => Navigate(chosen), active ? white : muted, 11, active);
@@ -333,7 +347,7 @@ namespace Volas
         {
             if (name == "Owner" && !plugin.Licensing.IsOwner) return;
             if (name == "Account") { plugin.Licensing.OpenAccountPanel(); return; }
-            if (currentPage == name && string.IsNullOrEmpty(currentQuery)) return;
+            if (currentPage == name && string.IsNullOrWhiteSpace(currentQuery)) return;
             if (currentPage != name) pageTransition = plugin.Settings.DesktopMotion.Value ? .18f : 1f;
             currentPage = name;
             featurePage = 0;
@@ -350,7 +364,7 @@ namespace Volas
         {
             foreach (var item in navButtons)
             {
-                bool active = item.Key == currentPage;
+                bool active = item.Key == currentPage && string.IsNullOrWhiteSpace(currentQuery);
                 item.Value.color = active ? hoverColor : panelColor;
                 navIndicators[item.Key].enabled = active;
                 if (navLabels.TryGetValue(item.Key, out var text))
@@ -399,7 +413,7 @@ namespace Volas
                     root.SetActive(true);
                     windowFade.blocksRaycasts = true;
                     windowFade.interactable = true;
-                    if (drawnPage != currentPage || drawnRevision != plugin.Features.Revision || searchPending)
+                    if (drawnPage != currentPage || drawnQuery != currentQuery || drawnRevision != plugin.Features.Revision || searchPending)
                     {
                         searchPending = false;
                         RedrawPage();
@@ -436,6 +450,13 @@ namespace Volas
                 window.gameObject.SetActive(true);
             }
             UpdatePolish(open);
+            if (open && Time.unscaledTime >= nextAvailabilityCheck)
+            {
+                nextAvailabilityCheck = Time.unscaledTime + .4f;
+                bool allowed = plugin.Game.IsSoloOrModdedRoom(), markers = plugin.Game.IsInModdedRoom();
+                if (allowed != lastRoomAllowed || markers != lastMarkerRoomAllowed)
+                { lastRoomAllowed = allowed; lastMarkerRoomAllowed = markers; if (featureListVisible && !searchPending) RedrawPage(); }
+            }
             if (open && searchPending && Time.unscaledTime >= searchDue)
             {
                 searchPending = false;
@@ -551,31 +572,31 @@ namespace Volas
             if (pageRoot == null) return;
             drawnRevision = plugin.Features.Revision;
             drawnPage = currentPage;
+            drawnQuery = currentQuery;
+            BuildNavigationFresh();
             pageTitle.text = string.IsNullOrWhiteSpace(currentQuery) ? currentPage : "Search results";
-            if (string.IsNullOrEmpty(currentQuery) && (currentPage == "Home" || currentPage == "Settings" || currentPage == "Wrist Layout" || currentPage == "Player ESP" || currentPage == "Gun Studio" || currentPage == "UI Effects" || currentPage == "Charm Studio" || currentPage == "Owner" || currentPage == "Community"))
-                featureScroll = null;
             ownerTelemetry = ownerFaults = communityStatus = homeStats = featureDetail = null;
             featureListVisible = false;
             featureRows.Clear();
             DestroyChildren(pageRoot);
             PruneGlows();
-            if (string.IsNullOrEmpty(currentQuery) && currentPage == "Home")
+            if (string.IsNullOrWhiteSpace(currentQuery) && currentPage == "Home")
                 DrawHome();
-            else if (string.IsNullOrEmpty(currentQuery) && currentPage == "Settings")
+            else if (string.IsNullOrWhiteSpace(currentQuery) && currentPage == "Settings")
                 DrawSettingsPage();
-            else if (string.IsNullOrEmpty(currentQuery) && currentPage == "Community")
+            else if (string.IsNullOrWhiteSpace(currentQuery) && currentPage == "Community")
                 DrawCommunityPage();
-            else if (string.IsNullOrEmpty(currentQuery) && currentPage == "Owner")
+            else if (string.IsNullOrWhiteSpace(currentQuery) && currentPage == "Owner")
                 DrawOwnerPage();
-            else if (string.IsNullOrEmpty(currentQuery) && currentPage == "Charm Studio")
+            else if (string.IsNullOrWhiteSpace(currentQuery) && currentPage == "Charm Studio")
                 DrawCharmStudio();
-            else if (string.IsNullOrEmpty(currentQuery) && currentPage == "UI Effects")
+            else if (string.IsNullOrWhiteSpace(currentQuery) && currentPage == "UI Effects")
                 DrawEffectsPage();
-            else if (string.IsNullOrEmpty(currentQuery) && currentPage == "Wrist Layout")
+            else if (string.IsNullOrWhiteSpace(currentQuery) && currentPage == "Wrist Layout")
                 DrawWristLayout();
-            else if (string.IsNullOrEmpty(currentQuery) && currentPage == "Player ESP")
+            else if (string.IsNullOrWhiteSpace(currentQuery) && currentPage == "Player ESP")
                 DrawMarkerSettings();
-            else if (string.IsNullOrEmpty(currentQuery) && currentPage == "Gun Studio")
+            else if (string.IsNullOrWhiteSpace(currentQuery) && currentPage == "Gun Studio")
                 DrawGunStudio();
             else
                 DrawFeaturePage();
@@ -678,7 +699,7 @@ namespace Volas
 
         private string BuildOwnerReport()
         {
-            return "Volas 1.9.0\nUnity " + Application.unityVersion + "\n" +
+            return "Volas 1.9.1\nUnity " + Application.unityVersion + "\n" +
                 plugin.FramesPerSecond.ToString("0") + " FPS / " + plugin.FrameMilliseconds.ToString("0.0") + " ms\n" +
                 "Features: " + plugin.Features.All.Count + " / active: " + plugin.Features.ActiveCount + "\n" +
                 "Marker status: " + plugin.Markers.Status + "\n" + plugin.Features.CatalogStatus + "\n" +
@@ -688,7 +709,7 @@ namespace Volas
         private void UpdateOwnerPage()
         {
             if (ownerTelemetry == null || ownerFaults == null) return;
-            string runtime = "Volas 1.9.0\nUnity " + Application.unityVersion + "\n" +
+            string runtime = "Volas 1.9.1\nUnity " + Application.unityVersion + "\n" +
                 plugin.FramesPerSecond.ToString("0") + " FPS  /  " + plugin.FrameMilliseconds.ToString("0.0") + " ms\n" +
                 plugin.Features.All.Count + " registered features\n" + plugin.Features.ActiveCount + " active features\n" +
                 plugin.Markers.Status + "\n" + plugin.Licensing.LicenseStats;
@@ -1022,14 +1043,16 @@ namespace Volas
         private void DrawFeaturePage()
         {
             featureListVisible = true;
-            featureScroll = null;
             var matches = GetVisibleFeatures();
             lastFeatureTotal = matches.Count;
             int pages = Mathf.Max(1, (matches.Count + FeaturesPerPage - 1) / FeaturesPerPage);
             featurePage = Mathf.Clamp(featurePage, 0, pages - 1);
             int start = featurePage * FeaturesPerPage;
             int end = Mathf.Min(matches.Count, start + FeaturesPerPage);
-            MakeText(pageRoot, matches.Count + " FEATURES", 4f, 0f, 340f, 24f, 12, muted, true);
+            MakeText(pageRoot, matches.Count + (string.IsNullOrWhiteSpace(currentQuery) ? " FEATURES" : " RESULTS"), 4f, 0f, 150f, 24f, 12, muted, true);
+            MakeButton(pageRoot, "Availability", availableOnly ? "AVAILABLE NOW" : "ALL FEATURES", 155f, 0f, 164f, 24f, hoverColor, () => { availableOnly = !availableOnly; featurePage = 0; RedrawPage(); }, white, 10, true);
+            string destination = FindPage(currentQuery);
+            if (destination != null) MakeButton(pageRoot,"Open matching page", "OPEN " + destination.ToUpperInvariant(), 325f,0f,224f,24f,panelColor,()=>Navigate(destination),white,10);
             MakeText(pageRoot, "PAGE " + (featurePage + 1) + " / " + pages, 560f, 0f, 160f, 24f, 12, muted, true);
             for (int i = start; i < end; i++)
             {
@@ -1049,7 +1072,9 @@ namespace Volas
                 AddIcon(rt, mod.Category, 9f, 11f, 19f, muted);
                 var label = MakeText(rt, Truncate(mod.Label, 30), 35f, 1f, 238f, 23f, 13, white, true);
                 label.horizontalOverflow = HorizontalWrapMode.Wrap;
-                MakeText(rt, mod.NeedsModdedRoom ? "SOLO / MODDED ONLY" : mod.ActionOnly ? "ACTION" : "LOCAL FEATURE", 35f, 23f, 238f, 14f, 9, muted);
+                bool usable = IsAvailable(mod);
+                MakeText(rt, !usable ? "UNAVAILABLE IN THIS ROOM" : mod.ActionOnly ? mod.Category + " / ACTION" : mod.Category, 35f, 23f, 238f, 14f, 9, muted);
+                if (!usable && !mod.Enabled) label.color = muted;
                 if (mod.ActionOnly)
                     MakeText(rt, ">", 331f, 2f, 20f, 38f, 17, muted, true);
                 else
@@ -1069,7 +1094,7 @@ namespace Volas
                 }, state.IsFavorite ? accentGray : muted, 13);
                 state.Favorite = favorite.GetComponentInChildren<Text>();
             }
-            if (matches.Count == 0) MakeText(pageRoot, "No matching features.", 12f, 40f, 680f, 36f, 14, muted);
+            if (matches.Count == 0) MakeText(pageRoot, availableOnly ? "No available results. Try All Features or a different search." : "No matches. Try a feature name, category, or keyword.", 12f, 40f, 680f, 36f, 13, muted);
             var previous = MakeButton(pageRoot, "Previous page", "PREVIOUS", 0f, 418f, 130f, 34f, panelColor, () => { featurePage--; RedrawPage(); }, white, 11, true);
             previous.interactable = featurePage > 0;
             var next = MakeButton(pageRoot, "Next page", "NEXT", 590f, 418f, 130f, 34f, panelColor, () => { featurePage++; RedrawPage(); }, white, 11, true);
@@ -1085,6 +1110,7 @@ namespace Volas
         {
             if (featureDetail == null) return;
             string detail = selected == null ? "Select a feature to view its description." : selected.Label + ": " + selected.Description;
+            if (selected != null && !IsAvailable(selected)) detail += " | Requires a supported room.";
             if (featureDetail.text != detail) featureDetail.text = detail;
         }
 
@@ -1162,33 +1188,46 @@ namespace Volas
             }
         }
 
+        private bool IsAvailable(Feature f)
+        {
+            if (!f.NeedsModdedRoom) return true;
+            if (f.Id == "marker_boxes" || f.Id == "marker_labels") return lastMarkerRoomAllowed;
+            return lastRoomAllowed;
+        }
+
+        private string FindPage(string query)
+        {
+            string q=FeatureSearch.Normalize(query);
+            if(q.Length==0)return null;
+            string partial=null;
+            foreach(string tab in Tabs)
+            {
+                if(tab.StartsWith("#",StringComparison.Ordinal)||(tab=="Owner"&&!plugin.Licensing.IsOwner))continue;
+                string name=FeatureSearch.Normalize(tab);
+                if(name==q)return tab;
+                if(q.Length>=3&&partial==null&&name.IndexOf(q,StringComparison.Ordinal)>=0)partial=tab;
+            }
+            return partial;
+        }
+
         private List<Feature> GetVisibleFeatures()
         {
-            var all = plugin.Features.All;
-            if (!string.IsNullOrWhiteSpace(currentQuery))
+            var all=plugin.Features.All;
+            Predicate<Feature> available=f=>!availableOnly || IsAvailable(f) || f.Enabled;
+            if(!string.IsNullOrWhiteSpace(currentQuery))return plugin.Features.Search(all,currentQuery,available);
+            IEnumerable<Feature> source;
+            switch(currentPage)
             {
-                string s = currentQuery.Trim();
-                return all.FindAll(f =>
-                    f.Label.IndexOf(s, StringComparison.OrdinalIgnoreCase) >= 0 ||
-                    f.Id.IndexOf(s, StringComparison.OrdinalIgnoreCase) >= 0 ||
-                    f.Category.IndexOf(s, StringComparison.OrdinalIgnoreCase) >= 0 ||
-                    f.Description.IndexOf(s, StringComparison.OrdinalIgnoreCase) >= 0);
+                case "All": source=all;break;
+                case "Favorites": source=plugin.Features.InCategory("Favorites");break;
+                case "Enabled": source=all.FindAll(f=>f.Enabled);break;
+                case "Local": source=all.FindAll(f=>!f.NeedsModdedRoom);break;
+                case "Players": source=plugin.Features.InCategory("Telemetry");break;
+                case "Projectiles": source=plugin.Features.InCategory("Gun Mods");break;
+                case "Plugin": source=plugin.Features.InCategory("Settings");break;
+                default: source=plugin.Features.InCategory(currentPage);break;
             }
-            switch (currentPage)
-            {
-                case "All": return new List<Feature>(all);
-                case "Favorites": return plugin.Features.InCategory("Favorites");
-                case "Enabled": return all.FindAll(f => f.Enabled);
-                case "Local": return plugin.Features.All.FindAll(f => (f.Category == "Local" || f.Category == "Telemetry") && !f.NeedsModdedRoom);
-                case "Players": return plugin.Features.InCategory("Telemetry");
-                case "Projectiles": return plugin.Features.InCategory("Gun Mods");
-                case "Fun": return plugin.Features.InCategory("Fun");
-                case "VR Rig": return plugin.Features.InCategory("VR Rig");
-                case "Master": return plugin.Features.InCategory("Master");
-                case "Safety": return plugin.Features.InCategory("Safety");
-                case "Plugin": return plugin.Features.InCategory("Settings");
-                default: return plugin.Features.InCategory(currentPage);
-            }
+            return plugin.Features.Search(source,"",available);
         }
 
         #endregion

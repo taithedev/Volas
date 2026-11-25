@@ -48,6 +48,7 @@ namespace Volas
         #region Registry state
 
         private readonly VolasPlugin plugin;
+        private readonly FeatureSearch search = new FeatureSearch();
         internal readonly List<Feature> All = new List<Feature>();
         private readonly Dictionary<string, Feature> byId = new Dictionary<string, Feature>(StringComparer.OrdinalIgnoreCase);
         internal readonly List<string> Categories = new List<string>();
@@ -92,6 +93,9 @@ namespace Volas
             Feature feature;
             return id != null && byId.TryGetValue(id, out feature) ? feature : null;
         }
+
+        internal List<Feature> Search(IEnumerable<Feature> source, string query, Predicate<Feature> include = null)
+        { return search.Find(source, query, include); }
 
         internal bool IsOn(string id)
         {

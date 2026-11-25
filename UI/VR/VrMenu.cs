@@ -327,7 +327,7 @@ namespace Volas
             }
             else
             {
-                if(mode==Mode.Local) {features=plugin.Features.All.FindAll(f=>(f.Category=="Local"||f.Category=="Telemetry")&&!f.NeedsModdedRoom);heading.text="Local display tools";}
+                if(mode==Mode.Local) {features=plugin.Features.All.FindAll(f=>!f.NeedsModdedRoom);heading.text="Local features";}
                 else if(mode==Mode.Saved) {features=plugin.Features.InCategory("Favorites");heading.text="Favorites";}
                 else if(mode==Mode.Enabled) {features=plugin.Features.All.FindAll(f=>f.Enabled);heading.text="Active features";}
                 else if(mode==Mode.All) {features=plugin.Features.All;heading.text="All features";}

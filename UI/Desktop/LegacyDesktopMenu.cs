@@ -14,6 +14,11 @@ namespace Volas
         private CursorLockMode savedLock;
         private string search = "";
         private Vector2 scroll;
+        private bool availableOnly = true;
+        private System.Collections.Generic.List<Feature> results;
+        private string lastSearch;
+        private int lastRevision = -1;
+        private bool lastAvailable, lastRoom, lastMarkerRoom;
 
         #endregion
 
@@ -81,17 +86,24 @@ namespace Volas
             GUILayout.Label("LOCAL MENU   |   FPS " + plugin.FramesPerSecond.ToString("0"));
             if (GUILayout.Button("Close", GUILayout.Width(64))) plugin.LegacyDesktopOpen = false;
             GUILayout.EndHorizontal();
-            GUILayout.Label("Filter local display tools");
-            search = GUILayout.TextField(search ?? "");
-            scroll = GUILayout.BeginScrollView(scroll);
-            DrawFeature("fps_hud");
-            DrawFeature("clock_hud");
-            DrawFeature("pos_hud");
-            DrawFeature("heading_hud");
-            DrawFeature("frame_time");
-            DrawFeature("session_clock");
-            DrawFeature("tracking_status");
-            DrawFeature("controller_battery");
+            GUILayout.Label("Search the complete feature catalog");
+            GUILayout.BeginHorizontal();
+            search=GUILayout.TextField(search??"",100);
+            if(GUILayout.Button("Clear",GUILayout.Width(60)))search="";
+            GUILayout.EndHorizontal();
+            availableOnly=GUILayout.Toggle(availableOnly,"Available in current room only");
+            bool room=plugin.Game.IsSoloOrModdedRoom(), markerRoom=plugin.Game.IsInModdedRoom();
+            if(results==null||lastSearch!=search||lastRevision!=plugin.Features.Revision||lastAvailable!=availableOnly||lastRoom!=room||lastMarkerRoom!=markerRoom)
+            {
+                if(lastSearch!=search)scroll=Vector2.zero;
+                lastSearch=search;lastRevision=plugin.Features.Revision;lastAvailable=availableOnly;lastRoom=room;lastMarkerRoom=markerRoom;
+                results=plugin.Features.Search(plugin.Features.All,search,f=>!availableOnly||f.Enabled||!f.NeedsModdedRoom||
+                    ((f.Id=="marker_boxes"||f.Id=="marker_labels")?markerRoom:room));
+            }
+            GUILayout.Label(results.Count+" results");
+            scroll=GUILayout.BeginScrollView(scroll);
+            foreach(var feature in results) DrawFeature(feature);
+            if(results.Count==0)GUILayout.Label("No matching available features.");
             GUILayout.Space(8f);
             GUILayout.Label("APPEARANCE");
             GUILayout.Label("Opacity: " + plugin.Settings.DesktopOpacity.Value.ToString("0.00"));
@@ -112,16 +124,23 @@ namespace Volas
                 window.position = new Vector2(20f, 20f);
             if (GUILayout.Button("Disable all active features")) plugin.Features.DisableAll();
             GUILayout.EndScrollView();
+            GUILayout.Label(plugin.Features.LastMessage);
             GUILayout.Label("F5: legacy  |  F6: modern  |  F7: VR test");
             GUI.DragWindow(new Rect(0f, 0f, 10000f, 20f));
         }
 
-        private void DrawFeature(string id)
+        private void DrawFeature(Feature feature)
         {
-            Feature feature = plugin.Features.Find(id);
-            if (feature == null || feature.Label.IndexOf(search ?? "", System.StringComparison.OrdinalIgnoreCase) < 0) return;
-            bool enabled = GUILayout.Toggle(feature.Enabled, feature.Label);
-            if (enabled != feature.Enabled) plugin.Features.Activate(feature);
+            if(feature==null)return;
+            GUILayout.BeginHorizontal();
+            bool old=GUI.enabled;
+            bool allowed=!feature.NeedsModdedRoom||((feature.Id=="marker_boxes"||feature.Id=="marker_labels")?lastMarkerRoom:lastRoom);
+            GUI.enabled=old&&(allowed||feature.Enabled);
+            if(feature.ActionOnly){if(GUILayout.Button(feature.Label+" / Run"))plugin.Features.Activate(feature);}
+            else { bool enabled=GUILayout.Toggle(feature.Enabled,feature.Label);if(enabled!=feature.Enabled)plugin.Features.Activate(feature); }
+            GUI.enabled=old;
+            if(GUILayout.Button(plugin.Features.IsFavorite(feature)?"Saved":"+ Save",GUILayout.Width(60)))plugin.Features.ToggleFavorite(feature);
+            GUILayout.EndHorizontal();
         }
 
         #endregion

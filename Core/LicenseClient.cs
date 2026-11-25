@@ -167,7 +167,7 @@ namespace Volas
                 GUI.Box(bounds, "");
                 GUILayout.BeginArea(new Rect(bounds.x+18f,bounds.y+16f,bounds.width-36f,bounds.height-32f));
                 GUILayout.Label(Authenticated ? (IsOwner ? "VOLAS / OWNER CONTROL" : "VOLAS / SESSION") : "VOLAS / LICENSE REQUIRED");
-                GUILayout.Label("Volas 1.9.0  |  Secure session");
+                GUILayout.Label("Volas 1.9.1  |  Secure session");
                 GUILayout.Space(9f);
                 if (!Authenticated)
                 {

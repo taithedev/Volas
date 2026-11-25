@@ -7,7 +7,7 @@ using UnityEngine.XR;
 
 namespace Volas
 {
-    [BepInPlugin("com.volas.gtag", "Volas", "1.9.0")]
+    [BepInPlugin("com.volas.gtag", "Volas", "1.9.1")]
     public sealed class VolasPlugin : BaseUnityPlugin
     {
         #region Services & runtime state
@@ -141,7 +141,7 @@ namespace Volas
 
             if (MenuInput.Shortcut(Settings.ResetShortcut.Value, KeyCode.End))
             {
-                Features.DisableAll();
+                RunSystem("Emergency reset", Features.DisableAll);
                 Licensing.SetCommunityEffects(false);
                 Community.Hide();
                 Logger.LogInfo("Volas: all active features disabled.");
