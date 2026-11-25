@@ -7,7 +7,7 @@ using UnityEngine.XR;
 
 namespace Volas
 {
-    [BepInPlugin("com.volas.gtag", "Volas", "1.5.0")]
+    [BepInPlugin("com.volas.gtag", "Volas", "1.6.0")]
     public sealed class VolasPlugin : BaseUnityPlugin
     {
         #region Services & runtime state
@@ -24,6 +24,7 @@ namespace Volas
         internal CreativeGunEffects CreativeGun { get; private set; }
         internal VisualDecorations Decorations { get; private set; }
         internal LocalCharms Charms { get; private set; }
+        internal LicenseClient Licensing { get; private set; }
         internal MovementEffects Movement { get; private set; }
         internal VrMenu Vr { get; private set; }
         internal VolasConfiguration Settings { get; private set; }
@@ -83,9 +84,10 @@ namespace Volas
             Instance = this;
             SessionStarted = Time.realtimeSinceStartup;
             Settings = new VolasConfiguration(Config);
+            Licensing = new LicenseClient(this);
             Compact = Settings.CompactMenu.Value;
             RainbowTheme = Settings.RainbowAccent.Value;
-            DesktopOpen = Settings.OpenDesktopOnLaunch.Value;
+            DesktopOpen = false;
             Game = new GameBridge();
             Effects = new VisualEffects(this);
             Markers = new PlayerMarkers(this);
@@ -113,6 +115,8 @@ namespace Volas
         {
             smoothFrameDelta = Mathf.Lerp(smoothFrameDelta, Mathf.Max(Time.unscaledDeltaTime, 0.00001f), 0.06f);
             FramesPerSecond = 1f / smoothFrameDelta;
+            Licensing.Tick();
+            if (!Licensing.Authenticated) return;
             Game.Refresh();
 
             if (Settings.DesktopShortcut.Value.IsDown())
@@ -182,11 +186,14 @@ namespace Volas
 
         private void LateUpdate()
         {
+            if (Licensing == null || !Licensing.Authenticated) return;
             if (legacyDesktop != null) legacyDesktop.Tick();
         }
 
         private void OnGUI()
         {
+            if (Licensing != null) Licensing.Draw();
+            if (Licensing == null || !Licensing.Authenticated || Licensing.PanelOpen) return;
             if (legacyDesktop == null || !LegacyDesktopOpen) return;
             try { legacyDesktop.Draw(); }
             catch (Exception ex)
@@ -256,6 +263,7 @@ namespace Volas
 
         private void FixedUpdate()
         {
+            if (Licensing == null || !Licensing.Authenticated) return;
             if (Features != null)
                 Features.FixedTick();
             if (Movement != null)
@@ -264,8 +272,24 @@ namespace Volas
                 Guns.FixedTick();
         }
 
+        internal void CloseLicensedMenus()
+        {
+            DesktopOpen = false; LegacyDesktopOpen = false; VrOpen = false;
+            if (Features != null) Features.DisableAll();
+            if (Movement != null) Movement.Reset();
+            try { if (desktop != null) desktop.Tick(); } catch { }
+            try { if (legacyDesktop != null) legacyDesktop.Close(); } catch { }
+            try { if (Vr != null) Vr.Tick(); } catch { }
+            try { if (Effects != null) Effects.Tick(); } catch { }
+            try { if (Markers != null) Markers.Tick(); } catch { }
+            try { if (ExtraVisuals != null) ExtraVisuals.Tick(); } catch { }
+            try { if (Decorations != null) Decorations.Tick(); } catch { }
+            try { if (Charms != null) Charms.Tick(); } catch { }
+        }
+
         private void OnDestroy()
         {
+            if (Licensing != null) Licensing.Dispose();
             if (Features != null) Features.DisableAll();
             if (Movement != null) Movement.Reset();
             if (Guns != null) Guns.Dispose();

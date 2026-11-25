@@ -66,7 +66,7 @@ $bepinex = Join-Path $selected "BepInEx\core\BepInEx.dll"
 if (-not (Test-Path -LiteralPath $bepinex)) {
     throw "BepInEx 5 Mono is missing: $bepinex"
 }
-$required = @("UnityEngine.CoreModule.dll", "UnityEngine.IMGUIModule.dll", "UnityEngine.UI.dll", "UnityEngine.UIModule.dll", "UnityEngine.InputLegacyModule.dll", "UnityEngine.PhysicsModule.dll", "UnityEngine.XRModule.dll", "UnityEngine.TextRenderingModule.dll", "UnityEngine.AudioModule.dll")
+$required = @("UnityEngine.CoreModule.dll", "UnityEngine.IMGUIModule.dll", "UnityEngine.UI.dll", "UnityEngine.UIModule.dll", "UnityEngine.InputLegacyModule.dll", "UnityEngine.PhysicsModule.dll", "UnityEngine.XRModule.dll", "UnityEngine.TextRenderingModule.dll", "UnityEngine.AudioModule.dll", "UnityEngine.UnityWebRequestModule.dll")
 $missing = @($required | Where-Object { -not (Test-Path -LiteralPath (Join-Path $managed $_)) })
 if ($missing.Count -gt 0) {
     throw ("Missing Unity assemblies: " + ($missing -join ", "))

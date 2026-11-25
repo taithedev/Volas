@@ -85,7 +85,7 @@
     <Reference Include="UnityEngine.AnimationModule" Condition="Exists('$(ManagedDir)\UnityEngine.AnimationModule.dll')">
       <HintPath>$(ManagedDir)\UnityEngine.AnimationModule.dll</HintPath><Private>false</Private>
     </Reference>
-    <Reference Include="UnityEngine.UnityWebRequestModule" Condition="Exists('$(ManagedDir)\UnityEngine.UnityWebRequestModule.dll')">
+    <Reference Include="UnityEngine.UnityWebRequestModule">
       <HintPath>$(ManagedDir)\UnityEngine.UnityWebRequestModule.dll</HintPath><Private>false</Private>
     </Reference>
   </ItemGroup>
@@ -115,6 +115,8 @@
            Text="Volas: UnityEngine.XRModule.dll missing at $(ManagedDir)." />
     <Error Condition="!Exists('$(ManagedDir)\UnityEngine.TextRenderingModule.dll')"
            Text="Volas: UnityEngine.TextRenderingModule.dll missing at $(ManagedDir)." />
+    <Error Condition="!Exists('$(ManagedDir)\UnityEngine.UnityWebRequestModule.dll')"
+           Text="Volas licensing requires UnityEngine.UnityWebRequestModule.dll from the installed game." />
     <Error Condition="!Exists('$(ManagedDir)\UnityEngine.AudioModule.dll')"
            Text="Volas: UnityEngine.AudioModule.dll missing at $(ManagedDir)." />
   </Target>

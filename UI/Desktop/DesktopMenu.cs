@@ -66,6 +66,7 @@ namespace Volas
         private int drawnRevision = -1;
         private string drawnPage = "";
         private bool visible;
+        private bool navigationOwner;
         private bool savedCursorVisible;
         private CursorLockMode savedLockMode;
         private float lastStatusUpdate;
@@ -152,7 +153,7 @@ namespace Volas
             AddAccentGlow(sidebar.rectTransform, 4f, 2f, 83f, 37f, .36f);
             AddIcon(sidebar.rectTransform, "Volas", 12f, 12f, 25f, accentGray);
             MakeText(sidebar.rectTransform, "VOLAS", 43f, 8f, 98f, 24f, 16, white, true);
-            MakeText(sidebar.rectTransform, "v1.5.0", 44f, 29f, 90f, 15f, 10, muted);
+            MakeText(sidebar.rectTransform, "v1.6.0", 44f, 29f, 90f, 15f, 10, muted);
             var brandLine = MakeImage(sidebar.rectTransform, "Brand divider", borderColor);
             Place(brandLine.rectTransform, 10f, 50f, 128f, 1f);
 
@@ -287,6 +288,7 @@ namespace Volas
 
         private void BuildNavigation()
         {
+            navigationOwner = plugin.Licensing.IsOwner;
             float y = 0f;
             foreach (string tab in Tabs)
             {
@@ -296,6 +298,7 @@ namespace Volas
                     y += 20f;
                     continue;
                 }
+                if (tab == "Owner" && !plugin.Licensing.IsOwner) continue;
                 string chosen = tab;
                 string label = tab == "Custom Categories" ? "custom" : tab.ToLowerInvariant();
                 bool active = tab == currentPage;
@@ -322,6 +325,7 @@ namespace Volas
 
         private void Navigate(string name)
         {
+            if (name == "Owner" && !plugin.Licensing.IsOwner) return;
             if (currentPage == name && string.IsNullOrEmpty(currentQuery)) return;
             if (currentPage != name) pageTransition = plugin.Settings.DesktopMotion.Value ? .18f : 1f;
             currentPage = name;
@@ -356,6 +360,13 @@ namespace Volas
         internal void Tick()
         {
             if (root == null) return;
+            if (navigationOwner != plugin.Licensing.IsOwner)
+            {
+                if (!plugin.Licensing.IsOwner && currentPage == "Owner") currentPage = "Home";
+                navButtons.Clear(); navLabels.Clear(); navIndicators.Clear();
+                DestroyChildren(navigationContent); PruneGlows(); BuildNavigation();
+                drawnRevision = -1;
+            }
             float alpha = plugin.Settings.DesktopOpacity.Value;
             if (Mathf.Abs(alpha - lastOpacity) > .001f)
             {
@@ -558,6 +569,7 @@ namespace Volas
             for (int i = 0; i < pages.Length; i++)
             {
                 string destination = pages[i];
+                if (destination == "Owner" && !plugin.Licensing.IsOwner) continue;
                 float x = (i % 3) * 245f, y = 67f + (i / 3) * 91f;
                 var button = MakeButton(pageRoot, "Home " + destination, "", x, y, 235f, 80f, panelColor, () => Navigate(destination));
                 var rt = button.transform as RectTransform;
@@ -570,8 +582,9 @@ namespace Volas
 
         private void DrawOwnerPage()
         {
+            if (!plugin.Licensing.IsOwner) return;
             MakeText(pageRoot, "Owner workspace", 4f, 0f, 700f, 30f, 19, white, true);
-            MakeText(pageRoot, "Local installation diagnostics — no remote admin permissions.", 4f, 31f, 710f, 22f, 11, muted);
+            MakeText(pageRoot, "Licensed owner tools / local diagnostics", 4f, 31f, 710f, 22f, 11, muted);
             var left = MakeImage(pageRoot, "Runtime", panelColor, softRounded, true);
             Place(left.rectTransform, 0f, 64f, 354f, 232f);
             var right = MakeImage(pageRoot, "Health", panelColor, softRounded, true);
@@ -593,13 +606,14 @@ namespace Volas
             MakeButton(pageRoot, "Reset all", "DISABLE ALL FEATURES", 488f, 309f, 232f, 42f, panelColor, () => { plugin.Features.DisableAll(); UpdateOwnerPage(); }, white, 12);
             MakeButton(pageRoot, "Validate catalog", "CHECK FEATURE METHODS", 0f, 363f, 232f, 42f, panelColor, () => { plugin.Features.ValidateCatalog(); UpdateOwnerPage(); }, white, 12);
             MakeButton(pageRoot, "UI settings", "APPEARANCE SETTINGS", 244f, 363f, 232f, 42f, panelColor, () => Navigate("UI Effects"), white, 12);
+            MakeButton(pageRoot, "Cloud controls", "LICENSES / ANNOUNCEMENTS", 488f, 363f, 232f, 42f, hoverColor, () => { plugin.DesktopOpen = false; plugin.Licensing.OpenOwnerPanel(); }, white, 11, true);
             MakeText(pageRoot, "Method check inspects registration only; it does not execute mods.", 4f, 422f, 710f, 28f, 11, muted);
             UpdateOwnerPage();
         }
 
         private string BuildOwnerReport()
         {
-            return "Volas 1.5.0\nUnity " + Application.unityVersion + "\n" +
+            return "Volas 1.6.0\nUnity " + Application.unityVersion + "\n" +
                 plugin.FramesPerSecond.ToString("0") + " FPS / " + plugin.FrameMilliseconds.ToString("0.0") + " ms\n" +
                 "Features: " + plugin.Features.All.Count + " / active: " + plugin.Features.ActiveCount + "\n" +
                 "Marker status: " + plugin.Markers.Status + "\n" + plugin.Features.CatalogStatus + "\n" +
@@ -609,7 +623,7 @@ namespace Volas
         private void UpdateOwnerPage()
         {
             if (ownerTelemetry == null || ownerFaults == null) return;
-            string runtime = "Volas 1.5.0\nUnity " + Application.unityVersion + "\n" +
+            string runtime = "Volas 1.6.0\nUnity " + Application.unityVersion + "\n" +
                 plugin.FramesPerSecond.ToString("0") + " FPS  /  " + plugin.FrameMilliseconds.ToString("0.0") + " ms\n" +
                 plugin.Features.All.Count + " registered features\n" + plugin.Features.ActiveCount + " active features\n" +
                 plugin.Markers.Status;
