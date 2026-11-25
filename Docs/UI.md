@@ -52,3 +52,7 @@ The current desktop menu uses in-place feature row and sidebar state updates, de
 ## Charm collection and marker preview
 
 Nine procedural wrist charms are available under Charms and in the physical menu categories. Charm Studio controls size, color, hand, rainbow and animation speed. Local-only cosmetics do not modify physics, network state or inventory. The marker preview is a stationary test shape in solo or permitted modded rooms. Remote markers remain depth-tested and restricted to recognized modded rooms. The status footer reports rig discovery. Runtime verification is still required.
+
+## Volas 1.5 desktop workspace
+
+Procedural cached line icons replace font-dependent navigation glyphs. Home provides shortcuts to active feature categories and tools. Owner is a local installation diagnostics workspace (not an authenticated service or remote administration console). It displays frame timing, registered and active features, marker status, latest feature fault and a catalog-handler check. The check validates registration only and does not prove game compatibility. The marker pool survives scene transitions and explicitly resolves a compatible runtime label font; actual rendering remains to be tested in permitted modded rooms. Existing room restrictions remain unchanged.

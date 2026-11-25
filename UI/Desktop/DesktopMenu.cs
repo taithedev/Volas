@@ -44,6 +44,8 @@ namespace Volas
         private readonly Font font;
         private readonly Sprite rounded;
         private readonly Sprite softRounded;
+        private readonly DesktopIcons icons = new DesktopIcons();
+        private Text ownerTelemetry, ownerFaults;
         private InputField searchBox;
         private string currentPage = "Home";
         private string currentQuery = "";
@@ -79,14 +81,13 @@ namespace Volas
         private readonly Color borderColor = new Color(.14f, .15f, .22f, .35f);
         private readonly Color accentGray = new Color(.37f, .41f, .83f, 1f);
         private readonly Color white = new Color(.86f, .87f, .90f, 1f);
-        private readonly Color muted = new Color(.49f, .51f, .59f, 1f);
+        private readonly Color muted = new Color(.63f, .66f, .74f, 1f);
 
         private static readonly string[] Tabs =
         {
-            "Home", "Players", "#MODS", "Movement", "Visuals", "Gamemode",
-            "Fun", "Charms", "Charm Studio", "Projectiles", "Custom Categories", "Zones", "#POWER",
-            "VR Rig", "Overpowered", "Master", "Global", "#LIBRARY",
-            "Local", "Favorites", "Enabled", "All", "Plugin", "Safety"
+            "Home", "Players", "#FEATURES", "Movement", "Visuals", "Fun", "Charms", "Projectiles",
+            "#COLLECTION", "Local", "Favorites", "Enabled", "All",
+            "#TOOLS", "Player ESP", "Charm Studio", "Gun Studio", "Wrist Layout", "UI Effects", "Settings", "Plugin", "Safety", "Owner"
         };
 
         #endregion
@@ -149,8 +150,9 @@ namespace Volas
             var sidebarLine = MakeImage(window, "Sidebar divider", borderColor);
             Place(sidebarLine.rectTransform, 149f, 1f, 1f, 498f);
             AddAccentGlow(sidebar.rectTransform, 4f, 2f, 83f, 37f, .36f);
-            MakeText(sidebar.rectTransform, "volas", 13f, 9f, 120f, 22f, 16, accentGray, true);
-            MakeText(sidebar.rectTransform, "v1.4.0", 14f, 30f, 120f, 14f, 10, muted);
+            AddIcon(sidebar.rectTransform, "Volas", 12f, 12f, 25f, accentGray);
+            MakeText(sidebar.rectTransform, "VOLAS", 43f, 8f, 98f, 24f, 16, white, true);
+            MakeText(sidebar.rectTransform, "v1.5.0", 44f, 29f, 90f, 15f, 10, muted);
             var brandLine = MakeImage(sidebar.rectTransform, "Brand divider", borderColor);
             Place(brandLine.rectTransform, 10f, 50f, 128f, 1f);
 
@@ -262,7 +264,7 @@ namespace Volas
             Image fieldImage = MakeImage(window, "Search background",
                 new Color(.055f, .063f, .089f, 1f), softRounded, true);
             Place(fieldImage.rectTransform, 515f, 8f, 198f, 26f);
-            MakeText(fieldImage.rectTransform, "⌕", 8f, 0f, 19f, 26f, 15, muted);
+            AddIcon(fieldImage.rectTransform, "Search", 7f, 5f, 16f, muted);
             fieldImage.raycastTarget = true;
             searchBox = fieldImage.gameObject.AddComponent<InputField>();
             searchBox.transition = Selectable.Transition.None;
@@ -309,7 +311,8 @@ namespace Volas
                 if (t != null)
                 {
                     t.alignment = TextAnchor.MiddleLeft;
-                    Place(t.rectTransform, 9f, 0f, 120f, 23f);
+                    Place(t.rectTransform, 29f, 0f, 102f, 23f);
+                    AddIcon(btn.transform, tab, 8f, 4f, 15f, active ? white : muted);
                     navLabels[tab] = t;
                 }
                 y += 26f;
@@ -319,6 +322,7 @@ namespace Volas
 
         private void Navigate(string name)
         {
+            if (currentPage == name && string.IsNullOrEmpty(currentQuery)) return;
             if (currentPage != name) pageTransition = plugin.Settings.DesktopMotion.Value ? .18f : 1f;
             currentPage = name;
             currentQuery = "";
@@ -431,6 +435,7 @@ namespace Volas
                 string message = currentPage == "Home" ? "" : plugin.Features.LastMessage;
                 if (currentPage == "Settings" && plugin.Vr != null) message = plugin.Vr.Status + "  |  Y / F7";
                 if (currentPage == "Player ESP") message = plugin.Markers.Status;
+                if (currentPage == "Owner") UpdateOwnerPage();
                 if (statusText.text != message) statusText.text = message;
             }
         }
@@ -518,8 +523,9 @@ namespace Volas
             drawnRevision = plugin.Features.Revision;
             drawnPage = currentPage;
             pageTitle.text = string.IsNullOrWhiteSpace(currentQuery) ? currentPage.ToLowerInvariant() : "search results";
-            if (string.IsNullOrEmpty(currentQuery) && (currentPage == "Home" || currentPage == "Settings" || currentPage == "Wrist Layout" || currentPage == "Player ESP" || currentPage == "Gun Studio" || currentPage == "UI Effects" || currentPage == "Charm Studio"))
+            if (string.IsNullOrEmpty(currentQuery) && (currentPage == "Home" || currentPage == "Settings" || currentPage == "Wrist Layout" || currentPage == "Player ESP" || currentPage == "Gun Studio" || currentPage == "UI Effects" || currentPage == "Charm Studio" || currentPage == "Owner"))
                 featureScroll = null;
+            ownerTelemetry = ownerFaults = null;
             featureRows.Clear();
             DestroyChildren(pageRoot);
             PruneGlows();
@@ -527,6 +533,8 @@ namespace Volas
                 DrawHome();
             else if (string.IsNullOrEmpty(currentQuery) && currentPage == "Settings")
                 DrawSettingsPage();
+            else if (string.IsNullOrEmpty(currentQuery) && currentPage == "Owner")
+                DrawOwnerPage();
             else if (string.IsNullOrEmpty(currentQuery) && currentPage == "Charm Studio")
                 DrawCharmStudio();
             else if (string.IsNullOrEmpty(currentQuery) && currentPage == "UI Effects")
@@ -543,42 +551,72 @@ namespace Volas
 
         private void DrawHome()
         {
-            string[][] cols =
+            MakeText(pageRoot, "Your workspace", 4f, 0f, 700f, 30f, 19, white, true);
+            MakeText(pageRoot, "Quick access to Volas features and tools.", 5f, 32f, 700f, 22f, 12, muted);
+            string[] pages = { "Visuals", "Movement", "Charms", "Favorites", "Enabled", "Local", "Player ESP", "UI Effects", "Owner" };
+            string[] hints = { "Local visual tools", "Permitted room tools", "Wrist cosmetics", "Saved features", "Active features", "Personal utilities", "Marker diagnostics", "Glass, bloom & audio", "Local developer tools" };
+            for (int i = 0; i < pages.Length; i++)
             {
-                new [] { "Settings", "Players", "Visuals", "Global", "Plugin", "Projectiles" },
-                new [] { "Favorites", "VR Rig", "Overpowered", "Gamemode", "Zone Locked", "Custom Categories" },
-                new [] { "Enabled", "Movement", "Masterclient", "Fun", "Help And Safety" }
-            };
-            for (int col = 0; col < 3; col++)
-            {
-                float x = col * 247f;
-                for (int i = 0; i < cols[col].Length; i++)
-                {
-                    string label = cols[col][i];
-                    float y = 1f + 43f * i;
-                    Image highlight = MakeImage(pageRoot, "Category " + label,
-                        new Color(0.087f, 0.087f, 0.087f, .10f));
-                    highlight.raycastTarget = true;
-                    Place(highlight.rectTransform, x, y, 237f, 38f);
-                    Button button = highlight.gameObject.AddComponent<Button>();
-                    button.targetGraphic = highlight;
-                    button.transition = Selectable.Transition.ColorTint;
-                    ColorBlock colors = button.colors;
-                    colors.normalColor = Color.white;
-                    colors.highlightedColor = new Color(0.730f, 0.730f, 0.730f, 1f);
-                    colors.pressedColor = new Color(0.547f, 0.547f, 0.547f, 1f);
-                    button.colors = colors;
-                    string destination = label == "Masterclient" ? "Master" :
-                        label == "Help And Safety" ? "Safety" :
-                        label == "Zone Locked" ? "Zones" :
-                        label;
-                    polish.Wire(button, () => Navigate(destination));
-                    MakeText(highlight.rectTransform, label, 7f, 8f, 223f, 22f,
-                        12, new Color(0.553f, 0.553f, 0.553f, 1f), true);
-                    var line = MakeImage(pageRoot, "Row divider", borderColor);
-                    Place(line.rectTransform, x + 2f, y + 38f, 232f, 1f);
-                }
+                string destination = pages[i];
+                float x = (i % 3) * 245f, y = 67f + (i / 3) * 91f;
+                var button = MakeButton(pageRoot, "Home " + destination, "", x, y, 235f, 80f, panelColor, () => Navigate(destination));
+                var rt = button.transform as RectTransform;
+                AddIcon(rt, destination, 12f, 12f, 24f, accentGray);
+                MakeText(rt, destination, 44f, 10f, 184f, 26f, 14, white, true);
+                MakeText(rt, hints[i], 12f, 45f, 212f, 22f, 11, muted);
             }
+            MakeText(pageRoot, "F6  Desktop     F5  Legacy     Y / F7  VR     End  Reset", 4f, 365f, 710f, 30f, 12, muted);
+        }
+
+        private void DrawOwnerPage()
+        {
+            MakeText(pageRoot, "Owner workspace", 4f, 0f, 700f, 30f, 19, white, true);
+            MakeText(pageRoot, "Local installation diagnostics — no remote admin permissions.", 4f, 31f, 710f, 22f, 11, muted);
+            var left = MakeImage(pageRoot, "Runtime", panelColor, softRounded, true);
+            Place(left.rectTransform, 0f, 64f, 354f, 232f);
+            var right = MakeImage(pageRoot, "Health", panelColor, softRounded, true);
+            Place(right.rectTransform, 366f, 64f, 354f, 232f);
+            MakeText(left.rectTransform, "RUNTIME", 14f, 10f, 326f, 25f, 12, accentGray, true);
+            ownerTelemetry = MakeText(left.rectTransform, "", 14f, 41f, 326f, 178f, 13, white);
+            ownerTelemetry.alignment = TextAnchor.UpperLeft;
+            ownerTelemetry.horizontalOverflow = HorizontalWrapMode.Wrap;
+            MakeText(right.rectTransform, "FEATURE HEALTH", 14f, 10f, 326f, 25f, 12, accentGray, true);
+            ownerFaults = MakeText(right.rectTransform, "", 14f, 41f, 326f, 178f, 12, muted);
+            ownerFaults.alignment = TextAnchor.UpperLeft;
+            ownerFaults.horizontalOverflow = HorizontalWrapMode.Wrap;
+            MakeButton(pageRoot, "Copy diagnostics", "COPY DIAGNOSTICS", 0f, 309f, 232f, 42f, hoverColor, () =>
+            {
+                GUIUtility.systemCopyBuffer = BuildOwnerReport();
+                plugin.Log.LogInfo("Volas local diagnostics copied.");
+            }, white, 12, true);
+            MakeButton(pageRoot, "Marker diagnostics", "MARKER DIAGNOSTICS", 244f, 309f, 232f, 42f, panelColor, () => Navigate("Player ESP"), white, 12);
+            MakeButton(pageRoot, "Reset all", "DISABLE ALL FEATURES", 488f, 309f, 232f, 42f, panelColor, () => { plugin.Features.DisableAll(); UpdateOwnerPage(); }, white, 12);
+            MakeButton(pageRoot, "Validate catalog", "CHECK FEATURE METHODS", 0f, 363f, 232f, 42f, panelColor, () => { plugin.Features.ValidateCatalog(); UpdateOwnerPage(); }, white, 12);
+            MakeButton(pageRoot, "UI settings", "APPEARANCE SETTINGS", 244f, 363f, 232f, 42f, panelColor, () => Navigate("UI Effects"), white, 12);
+            MakeText(pageRoot, "Method check inspects registration only; it does not execute mods.", 4f, 422f, 710f, 28f, 11, muted);
+            UpdateOwnerPage();
+        }
+
+        private string BuildOwnerReport()
+        {
+            return "Volas 1.5.0\nUnity " + Application.unityVersion + "\n" +
+                plugin.FramesPerSecond.ToString("0") + " FPS / " + plugin.FrameMilliseconds.ToString("0.0") + " ms\n" +
+                "Features: " + plugin.Features.All.Count + " / active: " + plugin.Features.ActiveCount + "\n" +
+                "Marker status: " + plugin.Markers.Status + "\n" + plugin.Features.CatalogStatus + "\n" +
+                "Faults: " + plugin.Features.FaultCount + "\n" + plugin.Features.LastFault;
+        }
+
+        private void UpdateOwnerPage()
+        {
+            if (ownerTelemetry == null || ownerFaults == null) return;
+            string runtime = "Volas 1.5.0\nUnity " + Application.unityVersion + "\n" +
+                plugin.FramesPerSecond.ToString("0") + " FPS  /  " + plugin.FrameMilliseconds.ToString("0.0") + " ms\n" +
+                plugin.Features.All.Count + " registered features\n" + plugin.Features.ActiveCount + " active features\n" +
+                plugin.Markers.Status;
+            string health = plugin.Features.CatalogStatus + "\n\nRuntime faults: " + plugin.Features.FaultCount +
+                "\n" + plugin.Features.LastFault;
+            if (ownerTelemetry.text != runtime) ownerTelemetry.text = runtime;
+            if (ownerFaults.text != health) ownerFaults.text = health;
         }
 
         #endregion
@@ -905,7 +943,8 @@ namespace Volas
                         RefreshFeatureRows();
                     });
                 var rt = row.transform as RectTransform;
-                var label = MakeText(rt, Truncate(mod.Label, 34), 12f, 0f, 282f, 36f, 13, white, true);
+                AddIcon(rt, mod.Category, 9f, 9f, 18f, muted);
+                var label = MakeText(rt, Truncate(mod.Label, 32), 34f, 0f, 244f, 36f, 13, white, true);
                 label.horizontalOverflow = HorizontalWrapMode.Wrap;
                 if (mod.ActionOnly)
                 {
@@ -1080,6 +1119,7 @@ namespace Volas
             accentGlows.Clear();
             expiredGlows.Clear();
             polish.Dispose();
+            icons.Dispose();
             if (root != null) UnityEngine.Object.Destroy(root);
             if (createdEventSystem != null)
                 UnityEngine.Object.Destroy(createdEventSystem);
@@ -1166,6 +1206,12 @@ namespace Volas
             rt.pivot = new Vector2(.5f, .5f);
             rt.anchoredPosition = Vector2.zero;
             rt.sizeDelta = new Vector2(w, h);
+        }
+
+        private void AddIcon(Transform parent, string name, float x, float y, float size, Color color)
+        {
+            var image = MakeImage(parent, "Icon " + name, color, icons.Get(name));
+            Place(image.rectTransform, x, y, size, size);
         }
 
         private static Image MakeImage(Transform parent, string name, Color color,

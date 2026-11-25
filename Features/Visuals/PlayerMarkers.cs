@@ -17,6 +17,7 @@ namespace Volas
         private readonly List<Component> targets = new List<Component>(12);
         private Type rigType;
         private Material material;
+        private Font labelFont;
         private float nextScan, nextRefresh;
         private bool active, faultLogged;
         private sealed class Marker
@@ -54,16 +55,17 @@ namespace Volas
                 for (int i = 0; i < pool.Count; i++)
                 {
                     Marker m = pool[i];
-                    if (!m.Root.activeSelf) continue;
+                    if (m.Root == null || !m.Root.activeSelf) continue;
                     if (m.Target == null || !m.Target.gameObject.activeInHierarchy || (m.Target.transform.position - camera.transform.position).sqrMagnitude > plugin.Settings.MarkerRange.Value * plugin.Settings.MarkerRange.Value)
                     { m.Root.SetActive(false); continue; }
                     m.Root.transform.position = m.Target.transform.position;
-                    m.Label.transform.rotation = camera.transform.rotation;
+                    if (Labels) m.Label.transform.rotation = camera.transform.rotation;
                 }
             }
             catch (Exception ex)
             {
                 Hide();
+                Status = "Marker error: " + ex.GetBaseException().Message;
                 if (!faultLogged) { faultLogged = true; plugin.Log.LogWarning("Player marker compatibility: " + ex.Message); }
                 plugin.Features.Disable(plugin.Features.Find("marker_boxes"));
                 plugin.Features.Disable(plugin.Features.Find("marker_labels"));
@@ -99,6 +101,7 @@ namespace Volas
             float maxSq = max * max;
             int limit = plugin.Settings.MarkerLimit.Value;
             int used = 0;
+            pool.RemoveAll(m => m.Root == null);
             targets.RemoveAll(t => t == null || !t.gameObject.activeInHierarchy);
             targets.Sort((a,b) => (a.transform.position-center).sqrMagnitude.CompareTo((b.transform.position-center).sqrMagnitude));
             for (int i = 0; i < targets.Count && used < limit; i++)
@@ -131,6 +134,7 @@ namespace Volas
                 material = new Material(shader) { color = Color.white };
             }
             GameObject root = new GameObject("Volas player marker");
+            UnityEngine.Object.DontDestroyOnLoad(root);
             root.SetActive(false);
             LineRenderer line = root.AddComponent<LineRenderer>();
             line.sharedMaterial = material;
@@ -146,6 +150,16 @@ namespace Volas
             labelObject.transform.SetParent(root.transform, false);
             labelObject.transform.localPosition = new Vector3(0f,.78f,0f);
             var label = labelObject.AddComponent<TextMesh>();
+            if (labelFont == null)
+            {
+                try { labelFont = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"); } catch (Exception) { }
+                if (labelFont == null) try { labelFont = Resources.GetBuiltinResource<Font>("Arial.ttf"); } catch (Exception) { }
+            }
+            if (labelFont != null)
+            {
+                label.font = labelFont;
+                labelObject.GetComponent<MeshRenderer>().sharedMaterial = labelFont.material;
+            }
             label.anchor = TextAnchor.MiddleCenter;
             label.alignment = TextAlignment.Center;
             label.fontSize = 42;
@@ -166,6 +180,7 @@ namespace Volas
             }
             preview.Root.transform.position = previewPosition;
             preview.Line.startWidth = preview.Line.endWidth = plugin.Settings.MarkerWidth.Value;
+            preview.Line.startColor = preview.Line.endColor = Color.white;
             preview.Label.transform.rotation = camera.transform.rotation;
         }
         private void HidePreview() { if (preview != null && preview.Root != null && preview.Root.activeSelf) preview.Root.SetActive(false); }

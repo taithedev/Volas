@@ -53,6 +53,10 @@ namespace Volas
         private readonly HashSet<string> favorites = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         internal int Revision { get; private set; }
         internal string LastMessage { get; private set; } = "Ready";
+        internal int FaultCount { get; private set; }
+        internal string LastFault { get; private set; } = "No recorded faults";
+        internal string CatalogStatus { get; private set; } = "Catalog not checked";
+        internal int ActiveCount { get { int count = 0; foreach (var feature in All) if (feature.Enabled) count++; return count; } }
 
         internal FeatureRegistry(VolasPlugin owner) { plugin = owner; }
 
@@ -67,6 +71,17 @@ namespace Volas
             if (Categories.Count == 0) { Categories.Add("All"); Categories.Add("Favorites"); }
             if (!Categories.Contains(f.Category)) Categories.Add(f.Category);
             Revision++;
+        }
+
+        internal void ValidateCatalog()
+        {
+            int errors = 0;
+            var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var feature in All)
+            {
+                if (string.IsNullOrWhiteSpace(feature.Id) || !ids.Add(feature.Id) || feature.OnEnable == null) errors++;
+            }
+            CatalogStatus = errors == 0 ? "Catalog check: " + All.Count + " registered handlers OK" : "Catalog check: " + errors + " invalid registrations";
         }
 
         internal Feature Find(string id)
@@ -167,14 +182,16 @@ namespace Volas
             if (f == null || !f.Enabled) return;
             f.Enabled = false;
             try { f.OnDisable?.Invoke(plugin); }
-            catch (Exception ex) { Fault(f, ex); }
+            catch (Exception ex) { Fault(f, ex); Revision++; return; }
             LastMessage = f.Label + " disabled";
             Revision++;
         }
 
         private void Fault(Feature f, Exception ex)
         {
-            LastMessage = f.Label + ": " + ex.GetBaseException().Message;
+            FaultCount++;
+            LastFault = f.Label + ": " + ex.GetBaseException().Message;
+            LastMessage = LastFault;
             plugin.Log.LogError("Volas feature " + f.Id + " failed: " + ex);
         }
 
@@ -224,6 +241,7 @@ namespace Volas
                 plugin.CreativeGun.Reset();
             if (plugin.Decorations != null)
                 plugin.Decorations.Reset();
+            if (plugin.Charms != null) plugin.Charms.Dispose();
             if (plugin.Gun != null)
                 plugin.Gun.Reset();
             if (plugin.ExtraVisuals != null)

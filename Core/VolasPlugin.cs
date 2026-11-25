@@ -7,7 +7,7 @@ using UnityEngine.XR;
 
 namespace Volas
 {
-    [BepInPlugin("com.volas.gtag", "Volas", "1.4.0")]
+    [BepInPlugin("com.volas.gtag", "Volas", "1.5.0")]
     public sealed class VolasPlugin : BaseUnityPlugin
     {
         #region Services & runtime state
@@ -98,6 +98,7 @@ namespace Volas
             Movement = new MovementEffects(this);
             Features = new FeatureRegistry(this);
             FeatureCatalog.Register(this);
+            Features.ValidateCatalog();
             Features.LoadFavorites(Settings.FavoriteIds.Value);
             Vr = new VrMenu(this);
             // A desktop uGUI initialization failure must never disable the physical VR menu.
