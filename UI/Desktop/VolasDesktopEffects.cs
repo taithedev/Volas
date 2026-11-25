@@ -39,8 +39,8 @@ namespace Volas
                 float falloff = Mathf.Max(0f, Mathf.Exp(-radius * 4.5f) - .011f);
                 pixels[y * 64 + x] = new Color32(255, 255, 255, (byte)(Mathf.Clamp01(falloff) * 255f));
             }
-            glowTexture.SetPixels32(pixels); glowTexture.Apply(false, true);
-            GlowSprite = Sprite.Create(glowTexture, new Rect(0, 0, 64, 64), new Vector2(.5f, .5f));
+            glowTexture.SetPixels32(pixels); glowTexture.Apply();
+            GlowSprite = Sprite.Create(glowTexture, new Rect(0, 0, 64, 64), new Vector2(.5f, .5f), 100f, 0, SpriteMeshType.FullRect);
             grainTexture = new Texture2D(64, 64, TextureFormat.RGBA32, false);
             grainTexture.wrapMode = TextureWrapMode.Repeat; grainTexture.filterMode = FilterMode.Point;
             var random = new System.Random(417);
