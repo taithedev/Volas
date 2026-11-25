@@ -42,10 +42,10 @@ namespace Volas
             if (token.Length != 0 && !Authenticated) LoseSession("Connection verification expired. Sign in again.");
             if (Authenticated)
             {
-                if (Input.GetKeyDown(KeyCode.F8)) { if (panel) HidePanel(); else OpenPanel(); }
+                if (MenuInput.Pressed(KeyCode.F8)) { if (panel) HidePanel(); else OpenPanel(); }
                 if (!busy && Time.realtimeSinceStartup >= nextHeartbeat) Start("heartbeat", "");
             }
-            else if (plugin.Settings.DesktopShortcut.Value.IsDown()) panel = !panel;
+            else if (MenuInput.Shortcut(plugin.Settings.DesktopShortcut.Value, KeyCode.F6)) panel = !panel;
             // Do not take the cursor until the desktop menu has restored its own cursor state.
             if (panel && !ownsCursor && !plugin.DesktopOpen && !plugin.LegacyDesktopOpen)
             {
@@ -132,10 +132,11 @@ namespace Volas
                 if (action == "login")
                 {
                     if (fields[2].Length != 64) { status = "Invalid session response."; yield break; }
-                    token = fields[2]; key = ""; HidePanel();
+                    token = fields[2]; key = "";
                 }
                 failures = 0;
                 role = fields[1]; verifiedAt = Time.realtimeSinceStartup;
+                if (action == "login") { HidePanel(); plugin.OnLicenseVerified(); }
                 licensed = fields[5]; revoked = fields[6]; online = fields[7];
                 int remaining;
                 if (fields.Length >= 10 && int.TryParse(fields[9], out remaining) && remaining > 0 && (fields[8] == "aurora" || fields[8] == "pulse" || fields[8] == "orbit"))
@@ -161,12 +162,12 @@ namespace Volas
         {
             if (panel)
             {
-                float width = Mathf.Min(450f, Screen.width - 24f), height = IsOwner ? 480f : 310f;
+                float width = Mathf.Min(450f, Screen.width - 24f), height = IsOwner ? 550f : 380f;
                 bounds = new Rect((Screen.width-width)*.5f,(Screen.height-height)*.5f,width,height);
                 GUI.Box(bounds, "");
                 GUILayout.BeginArea(new Rect(bounds.x+18f,bounds.y+16f,bounds.width-36f,bounds.height-32f));
                 GUILayout.Label(Authenticated ? (IsOwner ? "VOLAS / OWNER CONTROL" : "VOLAS / SESSION") : "VOLAS / LICENSE REQUIRED");
-                GUILayout.Label("Volas 1.8.0  |  Secure session");
+                GUILayout.Label("Volas 1.8.1  |  Secure session");
                 GUILayout.Space(9f);
                 if (!Authenticated)
                 {
@@ -182,6 +183,8 @@ namespace Volas
                 else
                 {
                     GUILayout.Label("Role: " + role);
+                    if (GUILayout.Button("Open desktop menu")) { HidePanel(); plugin.OpenVerifiedDesktop(); }
+                    if (GUILayout.Button("Open legacy menu")) { HidePanel(); plugin.OpenVerifiedLegacy(); }
                     bool consent = GUILayout.Toggle(sharePresence, "Share anonymous online presence (optional)");
                     if (consent != sharePresence) { sharePresence = consent; nextHeartbeat = 0f; }
                     bool participate = GUILayout.Toggle(CommunityEffects, "Participate in community cosmetic events");

@@ -82,3 +82,7 @@ The physical wrist menu uses scene-created meshes, not a Unity Editor prefab, an
 ## CS1705: UnityEngine.AudioModule requires netstandard 2.1
 
 Pull the latest project, close Gorilla Tag, clean the solution and run `build.bat -Install`. Current Volas targets `netstandard2.1` directly, including in Visual Studio. The SDK supplies its matching reference assembly; do not copy runtime netstandard DLLs into the project or manually add a 2.0 reference. Install a current .NET SDK if the reference pack is missing. An old `Volas.Local.props` framework setting no longer overrides the target.
+
+## v1.8.1 login/menu recovery
+
+Successful verification opens the modern desktop automatically, or the legacy desktop if modern initialization fails. F5/F6/F7/F8 support legacy input and a reflected Unity Input System keyboard fallback. F8 also provides explicit menu launch buttons. Acrylic capture cannot hold the menu closed indefinitely. Runtime subsystem exceptions are isolated and rate-limited in BepInEx/LogOutput.log.

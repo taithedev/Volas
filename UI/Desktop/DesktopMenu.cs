@@ -33,6 +33,7 @@ namespace Volas
         private float pageTransition = 1f;
         private int openGeneration;
         private bool waitingForBackdrop;
+        private float backdropDeadline;
         private readonly Dictionary<Image, float> accentGlows = new Dictionary<Image, float>();
         private readonly List<Image> expiredGlows = new List<Image>();
         private float lastBloomAmount = -1f;
@@ -157,7 +158,7 @@ namespace Volas
             AddAccentGlow(sidebar.rectTransform, 4f, 2f, 83f, 37f, .36f);
             AddIcon(sidebar.rectTransform, "Volas", 12f, 12f, 25f, accentGray);
             MakeText(sidebar.rectTransform, "VOLAS", 43f, 8f, 98f, 24f, 16, white, true);
-            MakeText(sidebar.rectTransform, "v1.8.0", 44f, 29f, 90f, 15f, 10, muted);
+            MakeText(sidebar.rectTransform, "v1.8.1", 44f, 29f, 90f, 15f, 10, muted);
             var brandLine = MakeImage(sidebar.rectTransform, "Brand divider", borderColor);
             Place(brandLine.rectTransform, 10f, 50f, 128f, 1f);
 
@@ -389,6 +390,7 @@ namespace Volas
                 {
                     int generation = ++openGeneration;
                     waitingForBackdrop = plugin.Settings.DesktopGlass.Value && !window.gameObject.activeSelf;
+                    backdropDeadline = Time.realtimeSinceStartup + .45f;
                     savedCursorVisible = Cursor.visible;
                     savedLockMode = Cursor.lockState;
                     Cursor.lockState = CursorLockMode.None;
@@ -426,6 +428,12 @@ namespace Volas
                     Cursor.lockState = savedLockMode;
                     Cursor.visible = savedCursorVisible;
                 }
+            }
+            if (open && waitingForBackdrop && Time.realtimeSinceStartup >= backdropDeadline)
+            {
+                ++openGeneration;
+                waitingForBackdrop = false;
+                window.gameObject.SetActive(true);
             }
             UpdatePolish(open);
             if (open && searchPending && Time.unscaledTime >= searchDue)
@@ -669,7 +677,7 @@ namespace Volas
 
         private string BuildOwnerReport()
         {
-            return "Volas 1.8.0\nUnity " + Application.unityVersion + "\n" +
+            return "Volas 1.8.1\nUnity " + Application.unityVersion + "\n" +
                 plugin.FramesPerSecond.ToString("0") + " FPS / " + plugin.FrameMilliseconds.ToString("0.0") + " ms\n" +
                 "Features: " + plugin.Features.All.Count + " / active: " + plugin.Features.ActiveCount + "\n" +
                 "Marker status: " + plugin.Markers.Status + "\n" + plugin.Features.CatalogStatus + "\n" +
@@ -679,7 +687,7 @@ namespace Volas
         private void UpdateOwnerPage()
         {
             if (ownerTelemetry == null || ownerFaults == null) return;
-            string runtime = "Volas 1.8.0\nUnity " + Application.unityVersion + "\n" +
+            string runtime = "Volas 1.8.1\nUnity " + Application.unityVersion + "\n" +
                 plugin.FramesPerSecond.ToString("0") + " FPS  /  " + plugin.FrameMilliseconds.ToString("0.0") + " ms\n" +
                 plugin.Features.All.Count + " registered features\n" + plugin.Features.ActiveCount + " active features\n" +
                 plugin.Markers.Status + "\n" + plugin.Licensing.LicenseStats;

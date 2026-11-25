@@ -7,7 +7,7 @@ using UnityEngine.XR;
 
 namespace Volas
 {
-    [BepInPlugin("com.volas.gtag", "Volas", "1.8.0")]
+    [BepInPlugin("com.volas.gtag", "Volas", "1.8.1")]
     public sealed class VolasPlugin : BaseUnityPlugin
     {
         #region Services & runtime state
@@ -35,6 +35,8 @@ namespace Volas
         private bool lastVrButton;
         private float nextInputWarning;
         private bool desktopFaultLogged;
+        private bool desktopFailed;
+        private readonly Dictionary<string, float> nextSystemWarning = new Dictionary<string, float>();
         private bool vrFaultLogged;
         private readonly List<InputDevice> leftControllerCandidates = new List<InputDevice>(4);
 
@@ -117,28 +119,27 @@ namespace Volas
         {
             smoothFrameDelta = Mathf.Lerp(smoothFrameDelta, Mathf.Max(Time.unscaledDeltaTime, 0.00001f), 0.06f);
             FramesPerSecond = 1f / smoothFrameDelta;
-            Licensing.Tick();
+            try { Licensing.Tick(); } catch (Exception ex) { ReportSystemFault("License tick", ex); }
             if (!Licensing.Authenticated)
             {
                 try { if (desktop != null) desktop.Tick(); } catch (Exception ex) { if (!desktopFaultLogged) { desktopFaultLogged = true; Logger.LogError("Volas desktop: " + ex.Message); } }
                 return;
             }
-            Game.Refresh();
-            Community.Tick();
+            RunSystem("Game bridge", Game.Refresh);
+            RunSystem("Community", Community.Tick);
 
-            if (!Licensing.PanelOpen && Settings.DesktopShortcut.Value.IsDown())
+            if (!Licensing.PanelOpen && MenuInput.Shortcut(Settings.DesktopShortcut.Value, KeyCode.F6))
             {
-                LegacyDesktopOpen = false;
-                legacyDesktop?.Close();
-                DesktopOpen = !DesktopOpen;
+                if (DesktopOpen || ((desktopFailed || desktop == null) && LegacyDesktopOpen)) { DesktopOpen = false; LegacyDesktopOpen = false; }
+                else OpenVerifiedDesktop();
             }
-            else if (!Licensing.PanelOpen && Settings.LegacyDesktopShortcut.Value.IsDown())
+            else if (!Licensing.PanelOpen && MenuInput.Shortcut(Settings.LegacyDesktopShortcut.Value, KeyCode.F5))
             {
-                DesktopOpen = false;
-                LegacyDesktopOpen = !LegacyDesktopOpen;
+                if (LegacyDesktopOpen) LegacyDesktopOpen = false;
+                else OpenVerifiedLegacy();
             }
 
-            if (Settings.ResetShortcut.Value.IsDown())
+            if (MenuInput.Shortcut(Settings.ResetShortcut.Value, KeyCode.End))
             {
                 Features.DisableAll();
                 Licensing.SetCommunityEffects(false);
@@ -146,8 +147,9 @@ namespace Volas
                 Logger.LogInfo("Volas: all active features disabled.");
             }
 
-            bool vrPressed = GetLeftYPressed();
-            bool testPressed = Settings.VrFallbackShortcut.Value.IsDown();
+            bool vrPressed = false;
+            try { vrPressed = GetLeftYPressed(); } catch (Exception ex) { ReportSystemFault("VR input", ex); }
+            bool testPressed = MenuInput.Shortcut(Settings.VrFallbackShortcut.Value, KeyCode.F7);
             if (!Licensing.PanelOpen && ((vrPressed && !lastVrButton) || testPressed))
             {
                 VrOpen = !VrOpen;
@@ -158,16 +160,17 @@ namespace Volas
             }
             lastVrButton = vrPressed;
 
-            Features.Tick();
-            Gun.Tick(!VrOpen && (Guns.AnyEnabled || CreativeGun.AnyEnabled));
-            Guns.Tick();
-            CreativeGun.Tick();
-            Movement.Tick();
-            Effects.Tick();
-            Markers.Tick();
-            ExtraVisuals.Tick();
-            Decorations.Tick();
-            Charms.Tick();
+            RunSystem("Feature registry", Features.Tick);
+            try { Gun.Tick(!VrOpen && !DesktopOpen && !LegacyDesktopOpen && !Licensing.PanelOpen && (Guns.AnyEnabled || CreativeGun.AnyEnabled)); }
+            catch (Exception ex) { Gun.Reset(); ReportSystemFault("GunLib", ex); }
+            RunSystem("Pointer effects", Guns.Tick);
+            RunSystem("Creative effects", CreativeGun.Tick);
+            RunSystem("Movement", Movement.Tick);
+            RunSystem("Visual effects", Effects.Tick);
+            RunSystem("Markers", Markers.Tick);
+            RunSystem("Extra visuals", ExtraVisuals.Tick);
+            RunSystem("Decorations", Decorations.Tick);
+            RunSystem("Charms", Charms.Tick);
             // Keep VR independently operational if the optional desktop UI crashes.
             try { Vr.Tick(); }
             catch (Exception ex)
@@ -187,7 +190,12 @@ namespace Volas
                     if (!desktopFaultLogged)
                     {
                         desktopFaultLogged = true;
-                        Logger.LogError("Volas desktop menu update failed; VR remains available: " + ex);
+                        Logger.LogError("Volas desktop menu update failed; switching to legacy: " + ex);
+                        desktopFailed = true;
+                        DesktopOpen = false;
+                        try { desktop.Dispose(); } catch { }
+                        desktop = null;
+                        OpenVerifiedLegacy();
                     }
                 }
             }
@@ -196,7 +204,39 @@ namespace Volas
         private void LateUpdate()
         {
             if (Licensing == null || !Licensing.Authenticated) return;
-            if (legacyDesktop != null) legacyDesktop.Tick();
+            if (legacyDesktop != null) RunSystem("Legacy menu", legacyDesktop.Tick);
+        }
+
+        internal void OnLicenseVerified()
+        {
+            Logger.LogInfo("Volas license verified; opening desktop workspace.");
+            OpenVerifiedDesktop();
+        }
+
+        internal void OpenVerifiedDesktop()
+        {
+            if (!Licensing.Authenticated) return;
+            if (desktop == null || desktopFailed) { OpenVerifiedLegacy(); return; }
+            LegacyDesktopOpen = false; VrOpen = false;
+            legacyDesktop?.Close(); DesktopOpen = true;
+        }
+
+        internal void OpenVerifiedLegacy()
+        {
+            if (!Licensing.Authenticated) return;
+            DesktopOpen = false; VrOpen = false; LegacyDesktopOpen = true;
+        }
+
+        private void RunSystem(string name, Action update)
+        {
+            try { update(); } catch (Exception ex) { ReportSystemFault(name, ex); }
+        }
+        private void ReportSystemFault(string name, Exception ex)
+        {
+            float next;
+            if (nextSystemWarning.TryGetValue(name, out next) && Time.unscaledTime < next) return;
+            nextSystemWarning[name] = Time.unscaledTime + 10f;
+            Logger.LogError("Volas " + name + ": " + ex);
         }
 
         private void OnGUI()
