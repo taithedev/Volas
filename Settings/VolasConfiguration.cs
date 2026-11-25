@@ -65,6 +65,9 @@ namespace Volas
         internal readonly ConfigEntry<float> GunAnimationSpeed;
         internal readonly ConfigEntry<float> GunMarkScale;
         internal readonly ConfigEntry<float> GunMarkLifetime;
+        internal readonly ConfigEntry<float> GunHue, GunSaturation, GunOpacity, GunWaveAmount, GunGlowAmount, GunEndWidth;
+        internal readonly ConfigEntry<bool> GunShowBeam, GunShowReticle, GunRotateReticle, GunShowMiss;
+        internal readonly ConfigEntry<int> GunSegments, GunColorMode;
         #endregion
 
         #region Saved preferences
@@ -152,11 +155,23 @@ namespace Volas
                 "If true, aim from right hand +forward. Otherwise aim along -up.");
             GunLeftHand = config.Bind("GunLib", "Left-hand pointer", false, "Use the left controller for aiming instead of right.");
             GunBeamStyle = config.Bind("GunLib", "Beam style", 0,
-                new ConfigDescription("0 Straight / 1 Wave / 2 Spiral",
-                    new AcceptableValueRange<int>(0, 2)));
+                new ConfigDescription("Beam style index; see Gun Studio.",
+                    new AcceptableValueRange<int>(0, 7)));
             GunReticleStyle = config.Bind("GunLib", "Reticle style", 0,
-                new ConfigDescription("0 Orb / 1 Block / 2 Ring / 3 Diamond",
-                    new AcceptableValueRange<int>(0, 3)));
+                new ConfigDescription("Reticle style index; see Gun Studio.",
+                    new AcceptableValueRange<int>(0, 11)));
+            GunHue = config.Bind("GunLib", "Custom hue", .57f, new ConfigDescription("Custom pointer hue.", new AcceptableValueRange<float>(0f, 1f)));
+            GunSaturation = config.Bind("GunLib", "Saturation", .8f, new ConfigDescription("Custom color saturation.", new AcceptableValueRange<float>(0f, 1f)));
+            GunOpacity = config.Bind("GunLib", "Opacity", 1f, new ConfigDescription("Pointer opacity.", new AcceptableValueRange<float>(.15f, 1f)));
+            GunWaveAmount = config.Bind("GunLib", "Pattern amplitude", .045f, new ConfigDescription("Decorative beam amplitude.", new AcceptableValueRange<float>(0f, .12f)));
+            GunGlowAmount = config.Bind("GunLib", "Glow strength", .17f, new ConfigDescription("Glow alpha.", new AcceptableValueRange<float>(0f, .5f)));
+            GunEndWidth = config.Bind("GunLib", "End width multiplier", .55f, new ConfigDescription("Beam taper.", new AcceptableValueRange<float>(.1f, 2f)));
+            GunSegments = config.Bind("GunLib", "Curve quality", 32, new ConfigDescription("Curve segment count.", new AcceptableValueRange<int>(12, 64)));
+            GunColorMode = config.Bind("GunLib", "Color mode", 0, new ConfigDescription("Accent, custom, spectrum, surface.", new AcceptableValueRange<int>(0, 3)));
+            GunShowBeam = config.Bind("GunLib", "Show beam", true);
+            GunShowReticle = config.Bind("GunLib", "Show reticle", true);
+            GunRotateReticle = config.Bind("GunLib", "Rotate reticle", true);
+            GunShowMiss = config.Bind("GunLib", "Show pointer without surface", false);
             GunRainbow = config.Bind("GunLib", "Rainbow pointer", false, "Cycle pointer color over time.");
             GunGlow = config.Bind("GunLib", "Soft glow", true, "Draw a local translucent outline along the beam.");
             GunPulse = config.Bind("GunLib", "Pulse animation", true, "Animate the pointer width and reticle size.");

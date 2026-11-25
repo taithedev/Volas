@@ -13,6 +13,8 @@ namespace Volas
         internal bool Sign;
         internal bool Sparkles;
         internal bool Checkerboard;
+        private readonly bool[] shapes = new bool[6];
+        internal void SetShape(int index,bool enabled) { if(index>=0&&index<shapes.Length)shapes[index]=enabled; }
 
         private readonly VolasPlugin plugin;
         private readonly List<EffectItem> active = new List<EffectItem>();
@@ -22,7 +24,7 @@ namespace Volas
             internal float Expiry;
         }
 
-        internal bool AnyEnabled { get { return Grid || Spiral || Arrow || Sign || Sparkles || Checkerboard; } }
+        internal bool AnyEnabled { get { if (Grid || Spiral || Arrow || Sign || Sparkles || Checkerboard) return true; foreach(bool enabled in shapes) if(enabled)return true; return false; } }
 
         internal CreativeGunEffects(VolasPlugin owner)
         {
@@ -39,6 +41,7 @@ namespace Volas
             if (Sign) MakeSign(hit);
             if (Sparkles) MakeSparkles(hit);
             if (Checkerboard) MakeCheckerboard(hit);
+            for(int i=0;i<shapes.Length;i++) if(shapes[i]) MakeOutline(hit,i);
         }
 
         internal void Tick()
@@ -51,6 +54,18 @@ namespace Volas
                     active.RemoveAt(i);
                 }
             }
+        }
+
+        private void MakeOutline(GunTarget target,int index)
+        {
+            var root=NewRoot("Decorative outline",target);
+            int style=index==0?6:index==1?7:index==2?8:index==3?9:index==4?10:11;
+            int count=PointerStyles.OutlineCount(style);
+            var line=MakeLine(root,"Outline",count,.014f);
+            line.loop=true;
+            float size=.28f*plugin.Settings.GunMarkScale.Value;
+            for(int i=0;i<count;i++)line.SetPosition(i,PointerStyles.OutlinePoint(style,i,count)*size);
+            Track(root);
         }
 
         private void MakeGrid(GunTarget target)
@@ -129,7 +144,7 @@ namespace Volas
                 dot.transform.localScale = Vector3.one * 0.025f * scale;
                 var collision = dot.GetComponent<Collider>();
                 if (collision != null) collision.enabled = false;
-                dot.GetComponent<Renderer>().material = NewMaterial(Color.HSVToRGB(
+                dot.GetComponent<Renderer>().sharedMaterial = NewMaterial(Color.HSVToRGB(
                     UnityEngine.Random.value, 0.72f, 1f));
             }
             Track(root);
@@ -152,7 +167,7 @@ namespace Volas
                     cube.transform.localScale = new Vector3(0.085f, 0.085f, 0.008f) * scale;
                     var collider = cube.GetComponent<Collider>();
                     if (collider != null) collider.enabled = false;
-                    cube.GetComponent<Renderer>().material = NewMaterial(plugin.Accent);
+                    cube.GetComponent<Renderer>().sharedMaterial = NewMaterial(plugin.Accent);
                 }
             }
             Track(root);
@@ -178,7 +193,7 @@ namespace Volas
             line.endWidth = line.startWidth;
             line.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             line.receiveShadows = false;
-            line.material = NewMaterial(plugin.Accent);
+            line.sharedMaterial = NewMaterial(plugin.Accent);
             return line;
         }
 
@@ -186,7 +201,7 @@ namespace Volas
         {
             var shader = Shader.Find("Sprites/Default") ?? Shader.Find("Unlit/Color") ?? Shader.Find("Standard");
             if (shader == null) throw new InvalidOperationException("Volas: required shader is missing.");
-            return new Material(shader) { color = color };
+            return new Material(shader) { color = color, name = "Volas decorative material" };
         }
 
         private void Track(GameObject root)
@@ -196,7 +211,7 @@ namespace Volas
                 Root = root,
                 Expiry = Time.time + plugin.Settings.GunMarkLifetime.Value
             });
-            while (active.Count > 70)
+            while (active.Count > 36)
             {
                 DestroyGroup(active[0].Root);
                 active.RemoveAt(0);
@@ -207,7 +222,7 @@ namespace Volas
         {
             if (group == null) return;
             foreach (var renderer in group.GetComponentsInChildren<Renderer>(true))
-                if (renderer != null && renderer.sharedMaterial != null)
+                if (renderer != null && renderer.sharedMaterial != null && renderer.sharedMaterial.name == "Volas decorative material")
                     UnityEngine.Object.Destroy(renderer.sharedMaterial);
             UnityEngine.Object.Destroy(group);
         }

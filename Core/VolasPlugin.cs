@@ -7,7 +7,7 @@ using UnityEngine.XR;
 
 namespace Volas
 {
-    [BepInPlugin("com.volas.gtag", "Volas", "1.8.1")]
+    [BepInPlugin("com.volas.gtag", "Volas", "1.9.0")]
     public sealed class VolasPlugin : BaseUnityPlugin
     {
         #region Services & runtime state

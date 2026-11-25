@@ -4,6 +4,12 @@ namespace Volas
     {
         internal static void Register(FeatureRegistry registry)
         {
+            string[] outlines = { "Triangle", "Hexagon", "Star", "Heart", "Flower", "Octagon" };
+            for(int i=0;i<outlines.Length;i++)
+            {
+                int index=i;
+                registry.Add(new Feature("pointer_outline_"+i,"Gun Mods",outlines[i]+" stamp","Place a temporary local decorative outline.",p=>p.CreativeGun.SetShape(index,true),p=>p.CreativeGun.SetShape(index,false)));
+            }
             registry.Add(new Feature("gun_preview", "Gun Mods", "Pointer preview", "Test the local grip-controlled pointer without placing objects.", p => p.Gun.Preview = true, p => p.Gun.Preview = false));
             registry.Add(new Feature(
                 "gun_marker", "Gun Mods", "Marker gun", "Place a local luminous marker on a surface.",

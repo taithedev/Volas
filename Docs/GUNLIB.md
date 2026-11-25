@@ -45,3 +45,7 @@ This is source-only until it builds with a specific installation of Gorilla Tag 
 ## v1.8.1 pointer recovery
 
 Enable Projectiles > Pointer preview, close the menu, then hold the selected controller's grip. GunLib uses GTPlayer hand wrappers (controllerTransform), legacy transform fields, the controller input poller and Unity XR device fallback. Trigger callbacks run once per new press on a valid stationary surface; existing hold-trigger tools still use TriggerHeld. Beam and reticle objects are reused and hidden on release. The supplied example inspired the input and lifecycle design; Volas does not copy its per-frame GameObject creation or game rig/holdable manipulation. No game network messages are added. Test both hands in VR after rebuilding.
+
+## Version 1.9 Pointer Studio
+
+Eight decorative beam patterns, twelve reticles, six visual presets, four color modes, adjustable hue/saturation/opacity, glow, taper, pattern amplitude, curve quality, rotation, animation speed, beam/reticle visibility, miss visibility, range, hand and local stamp controls. Four Studio tabs provide direct selection. Six additional local outline stamps use the same procedural geometry. Preview is available independently and can be enabled directly from the Studio. Stamps are bounded to 36 groups; only owned materials are destroyed. All changes are local cosmetic tools; no new game-server actions or license backend changes. Compile and test in-game before distributing.

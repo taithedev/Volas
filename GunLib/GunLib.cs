@@ -126,7 +126,8 @@ namespace Volas
             }
 
             Target = target;
-            DrawPointer(origin, target);
+            if (target.HasHit || plugin.Settings.GunShowMiss.Value) DrawPointer(origin, target);
+            else HideVisuals();
 
             Status = target.HasHit ? "Aiming at surface" : "No surface hit";
             FiredThisFrame = triggerArmed && trigger && !previousTrigger;
@@ -187,80 +188,77 @@ namespace Volas
         private void DrawPointer(Vector3 origin, GunTarget target)
         {
             EnsureVisuals();
-            if (beam == null || reticle == null || haloBeam == null || reticleCircle == null)
-                return;
-            if (!beam.gameObject.activeSelf) beam.gameObject.SetActive(true);
-            float width = plugin.Settings.GunBeamWidth.Value;
-            float t = Time.unscaledTime * plugin.Settings.GunAnimationSpeed.Value;
-            float pulse = plugin.Settings.GunPulse.Value ? (0.82f + 0.18f * Mathf.Sin(t * 4f)) : 1f;
-            beam.startWidth = width * pulse;
-            beam.endWidth = width * 0.55f * pulse;
-            Color color = plugin.Settings.GunRainbow.Value
-                ? Color.HSVToRGB(Mathf.Repeat(t * 0.05f, 1f), 0.85f, 1f)
-                : (target.HasHit ? plugin.Accent : new Color(1f, 0.45f, 0.45f));
-            if (TriggerHeld && !plugin.Settings.GunRainbow.Value) color = Color.white;
+            if (beam == null || reticle == null || haloBeam == null || reticleCircle == null) return;
+            var cfg = plugin.Settings;
+            float t = Time.unscaledTime * cfg.GunAnimationSpeed.Value;
+            float pulse = cfg.GunPulse.Value ? .82f + .18f * Mathf.Sin(t * 4f) : 1f;
+            float width = cfg.GunBeamWidth.Value * pulse;
+            Color color = PointerStyles.ColorFor(cfg, plugin.Accent, target.HasHit, t);
+            beam.startWidth = width; beam.endWidth = width * cfg.GunEndWidth.Value;
             beamMaterial.color = Color.white;
             beam.startColor = beam.endColor = color;
 
-            int style = plugin.Settings.GunBeamStyle.Value;
-            int count = style == 0 ? 2 : 30;
-            if (beam.positionCount != count) beam.positionCount = count;
-            if (haloBeam.positionCount != count) haloBeam.positionCount = count;
-            Vector3 delta = target.Point - origin;
-            Vector3 axis = delta.sqrMagnitude > 0.0001f ? delta.normalized : Vector3.forward;
-            Vector3 side = Vector3.Cross(axis, Vector3.up);
-            if (side.sqrMagnitude < 0.002f) side = Vector3.Cross(axis, Vector3.right);
-            side.Normalize();
-            Vector3 up = Vector3.Cross(side, axis).normalized;
-            for (int i = 0; i < count; i++)
+            int style = Mathf.Clamp(cfg.GunBeamStyle.Value, 0, PointerStyles.Beams.Length - 1);
+            bool showBeam = cfg.GunShowBeam.Value;
+            bool showGlow = showBeam && cfg.GunGlow.Value && cfg.GunGlowAmount.Value > 0f;
+            beam.gameObject.SetActive(showBeam);
+            haloBeam.gameObject.SetActive(showGlow);
+            if (showBeam)
             {
-                float fraction = i / (count - 1f);
-                Vector3 position = Vector3.Lerp(origin, target.Point, fraction);
-                float taper = Mathf.Sin(fraction * Mathf.PI);
-                if (style == 1)
-                    position += side * (Mathf.Sin(fraction * 19f - t * 6f) * 0.035f * taper);
-                else if (style == 2)
+                int count = style == 0 ? 2 : Mathf.Clamp(cfg.GunSegments.Value, 12, 64);
+                if (beam.positionCount != count) beam.positionCount = count;
+                if (showGlow && haloBeam.positionCount != count) haloBeam.positionCount = count;
+                Vector3 delta = target.Point - origin;
+                Vector3 axis = delta.sqrMagnitude > .0001f ? delta.normalized : Vector3.forward;
+                Vector3 side = Vector3.Cross(axis, Vector3.up);
+                if (side.sqrMagnitude < .002f) side = Vector3.Cross(axis, Vector3.right);
+                side.Normalize();
+                Vector3 up = Vector3.Cross(side, axis).normalized;
+                for (int i = 0; i < count; i++)
                 {
-                    float spin = fraction * 28f + t * 5f;
-                    position += (side * Mathf.Cos(spin) + up * Mathf.Sin(spin)) * 0.045f * taper;
+                    float u = i / (count - 1f);
+                    Vector3 point = Vector3.Lerp(origin, target.Point, u) + PointerStyles.BeamOffset(style, u, t, cfg.GunWaveAmount.Value, side, up);
+                    beam.SetPosition(i, point);
+                    if (showGlow) haloBeam.SetPosition(i, point);
                 }
-                beam.SetPosition(i, position);
-                if (plugin.Settings.GunGlow.Value) haloBeam.SetPosition(i, position);
+                if (showGlow)
+                {
+                    haloBeam.startWidth = width * 3.3f; haloBeam.endWidth = width * cfg.GunEndWidth.Value * 3f;
+                    haloMaterial.color = Color.white;
+                    haloBeam.startColor = haloBeam.endColor = new Color(color.r,color.g,color.b,color.a * cfg.GunGlowAmount.Value);
+                }
             }
 
-            haloBeam.gameObject.SetActive(plugin.Settings.GunGlow.Value);
-            haloBeam.startWidth = width * 3.3f * pulse;
-            haloBeam.endWidth = width * 1.6f * pulse;
-            haloMaterial.color = Color.white;
-            haloBeam.startColor = haloBeam.endColor = new Color(color.r, color.g, color.b, .17f);
-
-            int reticleStyle = plugin.Settings.GunReticleStyle.Value;
+            int reticleStyle = Mathf.Clamp(cfg.GunReticleStyle.Value, 0, PointerStyles.Reticles.Length - 1);
             if (reticleStyle != currentReticleStyle) ConfigureReticle(reticleStyle);
             if (reticle == null || reticleMaterial == null) return;
-            var reticlePoint = target.Point + target.Normal * 0.015f;
-            reticle.transform.position = reticlePoint;
-            reticle.transform.localScale = Vector3.one *
-                (plugin.Settings.GunReticleSize.Value * pulse);
-            reticleMaterial.color = color;
-            reticle.SetActive(reticleStyle != 2);
-            if (reticleStyle == 3)
-                reticle.transform.rotation = Quaternion.Euler(45f, t * 38f, 45f);
+            bool outline = reticleStyle == 2 || reticleStyle >= 6;
+            bool show = cfg.GunShowReticle.Value;
+            Vector3 pointOnSurface = target.Point + target.Normal * .015f;
+            reticle.SetActive(show && !outline);
+            reticleCircle.gameObject.SetActive(show && outline);
+            if (!show) return;
+            float size = cfg.GunReticleSize.Value * pulse;
+            if (!outline)
+            {
+                reticle.transform.position = pointOnSurface;
+                reticle.transform.localScale = Vector3.one * size;
+                reticleMaterial.color = color;
+                reticle.transform.rotation = reticleStyle == 3 ? Quaternion.Euler(45f, cfg.GunRotateReticle.Value ? t * 38f : 0f, 45f) :
+                    (cfg.GunRotateReticle.Value ? Quaternion.Euler(0f,t*38f,0f) : Quaternion.identity);
+            }
             else
-                reticle.transform.rotation = Quaternion.identity;
-
-            reticleCircle.gameObject.SetActive(reticleStyle == 2);
-            if (reticleStyle == 2)
             {
                 circleMaterial.color = Color.white;
                 reticleCircle.startColor = reticleCircle.endColor = color;
-                var rotation = Quaternion.LookRotation(target.Normal, Vector3.up);
-                float radius = plugin.Settings.GunReticleSize.Value * 0.58f * pulse;
-                for (int i = 0; i < 40; i++)
-                {
-                    float angle = i * Mathf.PI * 2f / 40f + t * 0.9f;
-                    reticleCircle.SetPosition(i, reticlePoint + rotation *
-                        new Vector3(Mathf.Cos(angle) * radius, Mathf.Sin(angle) * radius, 0f));
-                }
+                reticleCircle.startWidth = reticleCircle.endWidth = Mathf.Max(.002f, size * .07f);
+                int count = PointerStyles.OutlineCount(reticleStyle);
+                if (reticleCircle.positionCount != count) reticleCircle.positionCount = count;
+                Vector3 normal = target.Normal.sqrMagnitude > .0001f ? target.Normal.normalized : Vector3.forward;
+                Quaternion rotation = Quaternion.LookRotation(normal, Mathf.Abs(Vector3.Dot(normal,Vector3.up)) > .98f ? Vector3.right : Vector3.up);
+                if (cfg.GunRotateReticle.Value) rotation *= Quaternion.Euler(0f,0f,t*38f);
+                for (int i=0;i<count;i++)
+                    reticleCircle.SetPosition(i, pointOnSurface + rotation * PointerStyles.OutlinePoint(reticleStyle,i,count) * (size*.6f));
             }
         }
 
@@ -329,8 +327,7 @@ namespace Volas
             Shader shader = Shader.Find("Sprites/Default") ??
                             Shader.Find("Unlit/Color") ?? Shader.Find("Standard");
             if (shader == null) return;
-            reticle = GameObject.CreatePrimitive(style == 1 || style == 3
-                ? PrimitiveType.Cube : PrimitiveType.Sphere);
+            reticle = GameObject.CreatePrimitive(style == 1 || style == 3 ? PrimitiveType.Cube : style == 4 ? PrimitiveType.Capsule : style == 5 ? PrimitiveType.Cylinder : PrimitiveType.Sphere);
             reticle.name = "Volas GunLib decorative reticle";
             var collider = reticle.GetComponent<Collider>();
             if (collider != null) collider.enabled = false;
@@ -342,10 +339,10 @@ namespace Volas
 
         private void HideVisuals()
         {
-            if (reticle != null) reticle.SetActive(false);
-            if (beam != null) beam.gameObject.SetActive(false);
-            if (haloBeam != null) haloBeam.gameObject.SetActive(false);
-            if (reticleCircle != null) reticleCircle.gameObject.SetActive(false);
+            if (reticle != null && reticle.activeSelf) reticle.SetActive(false);
+            if (beam != null && beam.gameObject.activeSelf) beam.gameObject.SetActive(false);
+            if (haloBeam != null && haloBeam.gameObject.activeSelf) haloBeam.gameObject.SetActive(false);
+            if (reticleCircle != null && reticleCircle.gameObject.activeSelf) reticleCircle.gameObject.SetActive(false);
         }
 
         internal void Reset()

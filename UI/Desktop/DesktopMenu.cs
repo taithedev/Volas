@@ -158,7 +158,7 @@ namespace Volas
             AddAccentGlow(sidebar.rectTransform, 4f, 2f, 83f, 37f, .36f);
             AddIcon(sidebar.rectTransform, "Volas", 12f, 12f, 25f, accentGray);
             MakeText(sidebar.rectTransform, "VOLAS", 43f, 8f, 98f, 24f, 16, white, true);
-            MakeText(sidebar.rectTransform, "v1.8.1", 44f, 29f, 90f, 15f, 10, muted);
+            MakeText(sidebar.rectTransform, "v1.9.0", 44f, 29f, 90f, 15f, 10, muted);
             var brandLine = MakeImage(sidebar.rectTransform, "Brand divider", borderColor);
             Place(brandLine.rectTransform, 10f, 50f, 128f, 1f);
 
@@ -461,6 +461,7 @@ namespace Volas
                 string message = currentPage == "Home" ? "" : plugin.Features.LastMessage;
                 if (currentPage == "Settings" && plugin.Vr != null) message = plugin.Vr.Status + "  |  Y / F7";
                 if (currentPage == "Player ESP") message = plugin.Markers.Status;
+                if (currentPage == "Gun Studio" && plugin.Gun != null) message = plugin.Gun.Status;
                 if (currentPage == "Home") UpdateHomeStats();
                 if (currentPage == "Owner") UpdateOwnerPage();
                 if (currentPage == "Community") { UpdateCommunityPage(); message = plugin.Licensing.CloudStatus; }
@@ -677,7 +678,7 @@ namespace Volas
 
         private string BuildOwnerReport()
         {
-            return "Volas 1.8.1\nUnity " + Application.unityVersion + "\n" +
+            return "Volas 1.9.0\nUnity " + Application.unityVersion + "\n" +
                 plugin.FramesPerSecond.ToString("0") + " FPS / " + plugin.FrameMilliseconds.ToString("0.0") + " ms\n" +
                 "Features: " + plugin.Features.All.Count + " / active: " + plugin.Features.ActiveCount + "\n" +
                 "Marker status: " + plugin.Markers.Status + "\n" + plugin.Features.CatalogStatus + "\n" +
@@ -687,7 +688,7 @@ namespace Volas
         private void UpdateOwnerPage()
         {
             if (ownerTelemetry == null || ownerFaults == null) return;
-            string runtime = "Volas 1.8.1\nUnity " + Application.unityVersion + "\n" +
+            string runtime = "Volas 1.9.0\nUnity " + Application.unityVersion + "\n" +
                 plugin.FramesPerSecond.ToString("0") + " FPS  /  " + plugin.FrameMilliseconds.ToString("0.0") + " ms\n" +
                 plugin.Features.All.Count + " registered features\n" + plugin.Features.ActiveCount + " active features\n" +
                 plugin.Markers.Status + "\n" + plugin.Licensing.LicenseStats;
@@ -859,78 +860,111 @@ namespace Volas
             MakeButton(pageRoot, "Reset", "RESET CHARM SETTINGS", 370f, 211f, 330f, 40f, panelColor, () => { s.CharmScale.Value = 1f; s.CharmHue.Value = .65f; s.CharmSpeed.Value = 1f; s.CharmRainbow.Value = false; s.CharmRightHand.Value = false; RedrawPage(); }, white, 12);
         }
 
+        private int gunStudioTab;
+        private int gunPreset;
+
         private void DrawGunStudio()
         {
-            MakeText(pageRoot, "Gun Studio", 4f, 0f, 420f, 27f, 14, white, true);
-            RectTransform[] panels = new RectTransform[3];
-            string[] headings = { "Pointer", "Reticle", "Controls" };
-            for (int i = 0; i < 3; i++)
-            {
-                Image bg = MakeImage(pageRoot, headings[i], panelColor, softRounded, true);
-                Place(bg.rectTransform, i * 247f, 34f, 236f, 337f);
-                panels[i] = bg.rectTransform;
-                MakeText(panels[i], headings[i], 14f, 9f, 207f, 24f, 12, white, true);
-            }
-
             var cfg = plugin.Settings;
-            MakeText(panels[0], "Maximum pointer range", 14f, 42f, 205f, 20f,
-                11, muted);
-            MakeSlider(panels[0], "Range", 14f, 70f, 206f,
-                10f, 250f, cfg.GunDistance.Value, v => cfg.GunDistance.Value = v);
-            MakeText(panels[0], "Beam width", 14f, 110f, 205f, 20f, 11, muted);
-            MakeSlider(panels[0], "Beam width", 14f, 137f, 206f,
-                .002f, .06f, cfg.GunBeamWidth.Value,
-                v => cfg.GunBeamWidth.Value = v);
-            MakeButton(panels[0], "Beam style", "BEAM " +
-                new [] { "STRAIGHT", "WAVE", "SPIRAL" }[cfg.GunBeamStyle.Value],
-                14f, 198f, 208f, 36f, panelColor,
-                () =>
+            MakeText(pageRoot, "Pointer Studio", 4f, 0f, 430f, 28f, 19, white, true);
+            string[] tabs = { "STYLE", "COLOR", "BEHAVIOR", "PRESETS" };
+            for (int i=0;i<tabs.Length;i++)
+            {
+                int tab=i;
+                MakeButton(pageRoot,"Studio "+tabs[i],tabs[i],i*182f,34f,172f,32f,
+                    gunStudioTab==i ? hoverColor : panelColor,()=>{gunStudioTab=tab;RedrawPage();},white,11,true);
+            }
+            var left = MakeImage(pageRoot,"Studio left",panelColor,softRounded,true);
+            var right = MakeImage(pageRoot,"Studio right",panelColor,softRounded,true);
+            Place(left.rectTransform,0f,78f,354f,330f);
+            Place(right.rectTransform,366f,78f,354f,330f);
+            var l=left.rectTransform; var r=right.rectTransform;
+            if (gunStudioTab==0)
+            {
+                MakeText(l,"BEAM",14f,8f,320f,24f,12,white,true);
+                for(int i=0;i<PointerStyles.Beams.Length;i++)
                 {
-                    cfg.GunBeamStyle.Value = (cfg.GunBeamStyle.Value + 1) % 3;
-                    RedrawPage();
-                }, white, 11);
-
-            MakeText(panels[1], "Reticle size", 14f, 42f, 205f, 20f, 11, muted);
-            MakeSlider(panels[1], "Reticle size", 14f, 69f, 207f,
-                .025f, .20f, cfg.GunReticleSize.Value,
-                v => cfg.GunReticleSize.Value = v);
-            MakeButton(panels[1], "Reticle style", "RETICLE " +
-                new [] { "ORB", "BOX", "RING", "GEM" }[cfg.GunReticleStyle.Value],
-                14f, 124f, 208f, 36f, panelColor,
-                () =>
+                    int choice=i;
+                    MakeButton(l,"Beam "+i,PointerStyles.Beams[i],12f+(i%2)*166f,38f+(i/2)*37f,158f,32f,
+                        cfg.GunBeamStyle.Value==i?hoverColor:panelColor,()=>{cfg.GunBeamStyle.Value=choice;RedrawPage();},white,11);
+                }
+                StudioSlider(l,"Width",196f,.002f,.06f,cfg.GunBeamWidth.Value,v=>cfg.GunBeamWidth.Value=v);
+                StudioSlider(l,"Pattern amplitude",250f,0f,.12f,cfg.GunWaveAmount.Value,v=>cfg.GunWaveAmount.Value=v);
+                MakeText(r,"RETICLE",14f,8f,320f,24f,12,white,true);
+                for(int i=0;i<PointerStyles.Reticles.Length;i++)
                 {
-                    cfg.GunReticleStyle.Value = (cfg.GunReticleStyle.Value + 1) % 4;
-                    RedrawPage();
-                }, white, 11);
-            MakeButton(panels[1], "Rainbow pointer",
-                cfg.GunRainbow.Value ? "RAINBOW GUN ON" : "RAINBOW GUN OFF",
-                14f, 178f, 208f, 36f,
-                cfg.GunRainbow.Value ? accentGray : panelColor,
-                () => { cfg.GunRainbow.Value = !cfg.GunRainbow.Value; RedrawPage(); },
-                white, 11);
-            MakeButton(panels[1], "Glow",
-                cfg.GunGlow.Value ? "GLOW ON" : "GLOW OFF",
-                14f, 232f, 208f, 32f, panelColor,
-                () => { cfg.GunGlow.Value = !cfg.GunGlow.Value; RedrawPage(); },
-                white, 10);
+                    int choice=i;
+                    MakeButton(r,"Reticle "+i,PointerStyles.Reticles[i],12f+(i%3)*110f,38f+(i/3)*37f,102f,32f,
+                        cfg.GunReticleStyle.Value==i?hoverColor:panelColor,()=>{cfg.GunReticleStyle.Value=choice;RedrawPage();},white,11);
+                }
+                StudioSlider(r,"Reticle size",196f,.025f,.20f,cfg.GunReticleSize.Value,v=>cfg.GunReticleSize.Value=v);
+                StudioSlider(r,"Beam taper",250f,.1f,2f,cfg.GunEndWidth.Value,v=>cfg.GunEndWidth.Value=v);
+            }
+            else if(gunStudioTab==1)
+            {
+                MakeText(l,"COLOR MODE",14f,8f,320f,24f,12,white,true);
+                for(int i=0;i<PointerStyles.Colors.Length;i++)
+                {
+                    int choice=i;
+                    MakeButton(l,"Color "+i,PointerStyles.Colors[i],12f+(i%2)*166f,38f+(i/2)*37f,158f,32f,
+                        cfg.GunColorMode.Value==i?hoverColor:panelColor,()=>{cfg.GunColorMode.Value=choice;cfg.GunRainbow.Value=false;RedrawPage();},white,11);
+                }
+                StudioSlider(l,"Hue",122f,0f,1f,cfg.GunHue.Value,v=>cfg.GunHue.Value=v);
+                StudioSlider(l,"Saturation",176f,0f,1f,cfg.GunSaturation.Value,v=>cfg.GunSaturation.Value=v);
+                StudioSlider(l,"Opacity",230f,.15f,1f,cfg.GunOpacity.Value,v=>cfg.GunOpacity.Value=v);
+                MakeText(r,"EFFECTS",14f,8f,320f,24f,12,white,true);
+                StudioToggle(r,"Glow",38f,cfg.GunGlow.Value,()=>cfg.GunGlow.Value=!cfg.GunGlow.Value);
+                StudioToggle(r,"Pulse",78f,cfg.GunPulse.Value,()=>cfg.GunPulse.Value=!cfg.GunPulse.Value);
+                StudioToggle(r,"Rotation",118f,cfg.GunRotateReticle.Value,()=>cfg.GunRotateReticle.Value=!cfg.GunRotateReticle.Value);
+                StudioSlider(r,"Glow strength",164f,0f,.5f,cfg.GunGlowAmount.Value,v=>cfg.GunGlowAmount.Value=v);
+                StudioSlider(r,"Animation speed",224f,.15f,4f,cfg.GunAnimationSpeed.Value,v=>cfg.GunAnimationSpeed.Value=v);
+            }
+            else if(gunStudioTab==2)
+            {
+                MakeText(l,"INPUT & DISPLAY",14f,8f,320f,24f,12,white,true);
+                MakeButton(l,"Hand",cfg.GunLeftHand.Value?"LEFT HAND":"RIGHT HAND",12f,38f,330f,32f,panelColor,()=>{cfg.GunLeftHand.Value=!cfg.GunLeftHand.Value;RedrawPage();},white,11);
+                MakeButton(l,"Direction",cfg.GunUseForward.Value?"FORWARD":"DOWNHAND",12f,78f,330f,32f,panelColor,()=>{cfg.GunUseForward.Value=!cfg.GunUseForward.Value;RedrawPage();},white,11);
+                StudioToggle(l,"Beam",118f,cfg.GunShowBeam.Value,()=>cfg.GunShowBeam.Value=!cfg.GunShowBeam.Value);
+                StudioToggle(l,"Reticle",158f,cfg.GunShowReticle.Value,()=>cfg.GunShowReticle.Value=!cfg.GunShowReticle.Value);
+                StudioToggle(l,"Show on miss",198f,cfg.GunShowMiss.Value,()=>cfg.GunShowMiss.Value=!cfg.GunShowMiss.Value);
+                MakeText(r,"LOCAL TOOL SETTINGS",14f,8f,320f,24f,12,white,true);
+                StudioSlider(r,"Range (m)",38f,10f,250f,cfg.GunDistance.Value,v=>cfg.GunDistance.Value=v);
+                StudioSlider(r,"Curve quality",96f,12f,64f,cfg.GunSegments.Value,v=>cfg.GunSegments.Value=Mathf.RoundToInt(v));
+                StudioSlider(r,"Stamp size",154f,.5f,2.5f,cfg.GunMarkScale.Value,v=>cfg.GunMarkScale.Value=v);
+                StudioSlider(r,"Stamp lifetime (s)",212f,3f,120f,cfg.GunMarkLifetime.Value,v=>cfg.GunMarkLifetime.Value=v);
+            }
+            else
+            {
+                MakeText(l,"SIX VISUAL PRESETS",14f,8f,320f,24f,12,white,true);
+                for(int i=0;i<PointerStyles.Presets.Length;i++)
+                {
+                    int choice=i;
+                    MakeButton(l,"Preset "+i,PointerStyles.Presets[i],12f,38f+i*42f,330f,36f,panelColor,
+                        ()=>{gunPreset=choice;PointerStyles.ApplyPreset(cfg,choice);RedrawPage();},white,12,true);
+                }
+                MakeText(r,"Selected preset: "+PointerStyles.Presets[gunPreset],14f,12f,320f,30f,14,white,true);
+                MakeText(r,"Settings save automatically. Customize each preset in the other tabs.",14f,55f,310f,78f,12,muted).horizontalOverflow=HorizontalWrapMode.Wrap;
+                MakeButton(r,"Reset visuals","RESET VISUAL SETTINGS",12f,150f,330f,38f,panelColor,
+                    ()=>{PointerStyles.ApplyPreset(cfg,0);gunPreset=0;RedrawPage();},white,11);
+            }
+            var preview=plugin.Features.Find("gun_preview");
+            MakeButton(pageRoot,"Pointer preview",preview!=null&&preview.Enabled?"DISABLE PREVIEW":"ENABLE PREVIEW",0f,420f,232f,36f,hoverColor,
+                ()=>{plugin.Features.Activate(preview);RedrawPage();},white,11,true);
+            MakeButton(pageRoot,"Browse tools","BROWSE POINTER TOOLS",244f,420f,232f,36f,panelColor,()=>Navigate("Projectiles"),white,11);
+            MakeButton(pageRoot,"Test","CLOSE & TEST",488f,420f,232f,36f,panelColor,()=>{if(preview!=null&&!preview.Enabled)plugin.Features.Activate(preview);plugin.DesktopOpen=false;},white,11);
+            MakeText(pageRoot,"Hold grip after closing the menu. Changes are local cosmetics.",4f,461f,710f,26f,11,muted);
+        }
 
-            MakeButton(panels[2], "Left hand",
-                cfg.GunLeftHand.Value ? "LEFT HAND" : "RIGHT HAND",
-                14f, 53f, 208f, 36f, panelColor,
-                () => { cfg.GunLeftHand.Value = !cfg.GunLeftHand.Value; RedrawPage(); },
-                white, 11);
-            MakeButton(panels[2], "Forward aim",
-                cfg.GunUseForward.Value ? "FORWARD AIM" : "DOWNHAND AIM",
-                14f, 109f, 208f, 36f, panelColor,
-                () => { cfg.GunUseForward.Value = !cfg.GunUseForward.Value; RedrawPage(); },
-                white, 11);
-            MakeButton(panels[2], "Pulse effect",
-                cfg.GunPulse.Value ? "PULSE ON" : "PULSE OFF",
-                14f, 165f, 208f, 36f, panelColor,
-                () => { cfg.GunPulse.Value = !cfg.GunPulse.Value; RedrawPage(); },
-                white, 11);
-            MakeText(panels[2], "Hold the selected hand grip to aim, then fire with the trigger.",
-                14f, 222f, 204f, 75f, 11, muted);
+        private void StudioSlider(Transform parent,string label,float y,float min,float max,float value,Action<float> changed)
+        {
+            MakeText(parent,label,14f,y,320f,20f,11,muted);
+            MakeSlider(parent,label,14f,y+20f,326f,min,max,value,changed);
+        }
+
+        private void StudioToggle(Transform parent,string label,float y,bool on,Action toggle)
+        {
+            MakeButton(parent,label,label.ToUpperInvariant()+(on?" ON":" OFF"),12f,y,330f,32f,on?hoverColor:panelColor,
+                ()=>{toggle();RedrawPage();},white,11);
         }
 
         #endregion
