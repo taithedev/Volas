@@ -20,6 +20,10 @@ namespace Volas
         private readonly Vector3[] corners = new Vector3[4];
         private RawImage glass, grain;
         private RenderTexture blurred;
+        private Rect lastUv;
+        private float lastBlend = -1f;
+        private bool lastGlassEnabled;
+        private static readonly MethodInfo CaptureIntoTexture = ResolveCaptureMethod();
         private bool disposed;
         private float lastHover = -10f;
         private float lastClick = -10f;
@@ -110,36 +114,40 @@ namespace Volas
 
         #region Backdrop capture & rendering
 
-        // Capture only before the menu appears. Reflection avoids a mandatory
-        // UnityEngine.ScreenCaptureModule reference on differing game installs.
+        private static MethodInfo ResolveCaptureMethod()
+        {
+            try
+            {
+                Type type = Type.GetType("UnityEngine.ScreenCapture, UnityEngine.ScreenCaptureModule")
+                    ?? Type.GetType("UnityEngine.ScreenCapture, UnityEngine");
+                return type?.GetMethod("CaptureScreenshotIntoRenderTexture", BindingFlags.Public | BindingFlags.Static, null, new[] { typeof(RenderTexture) }, null);
+            }
+            catch { return null; }
+        }
+
+        // GPU-only capture avoids synchronous Texture2D pixel readback. If the
+        // Unity version has no capture API, keep a lightweight frosted surface.
         internal IEnumerator CaptureBackdrop(Func<bool> stillOpen, Action ready)
         {
             yield return new WaitForEndOfFrame();
             if (disposed || !stillOpen()) yield break;
             ClearBackdrop();
-            Texture2D screen = null;
-            RenderTexture a = null, b = null;
+            RenderTexture screen = null, small = null;
             try
             {
-                Type capture = Type.GetType("UnityEngine.ScreenCapture, UnityEngine.ScreenCaptureModule")
-                    ?? Type.GetType("UnityEngine.ScreenCapture, UnityEngine");
-                MethodInfo method = capture == null ? null : capture.GetMethod("CaptureScreenshotAsTexture", BindingFlags.Public | BindingFlags.Static, null, new[] { typeof(int) }, null);
-                if (method != null && plugin.Settings.DesktopGlass.Value)
+                if (CaptureIntoTexture != null && plugin.Settings.DesktopGlass.Value)
                 {
-                    screen = method.Invoke(null, new object[] { 1 }) as Texture2D;
-                    if (screen != null)
-                    {
-                        screen.filterMode = FilterMode.Bilinear;
-                        int w = Mathf.Max(4, screen.width / 4), h = Mathf.Max(4, screen.height / 4);
-                        a = RenderTexture.GetTemporary(w, h, 0, RenderTextureFormat.ARGB32);
-                        a.filterMode = FilterMode.Bilinear; a.wrapMode = TextureWrapMode.Clamp;
-                        b = RenderTexture.GetTemporary(Mathf.Max(4, w / 4), Mathf.Max(4, h / 4), 0, RenderTextureFormat.ARGB32);
-                        b.filterMode = FilterMode.Bilinear; b.wrapMode = TextureWrapMode.Clamp;
-                        blurred = new RenderTexture(Mathf.Max(4, w / 8), Mathf.Max(4, h / 8), 0, RenderTextureFormat.ARGB32);
-                        blurred.filterMode = FilterMode.Bilinear; blurred.wrapMode = TextureWrapMode.Clamp;
-                        blurred.Create();
-                        Graphics.Blit(screen, a); Graphics.Blit(a, b); Graphics.Blit(b, blurred);
-                    }
+                    int w = Mathf.Max(4, Screen.width), h = Mathf.Max(4, Screen.height);
+                    screen = RenderTexture.GetTemporary(w, h, 0, RenderTextureFormat.ARGB32);
+                    screen.filterMode = FilterMode.Bilinear;
+                    CaptureIntoTexture.Invoke(null, new object[] { screen });
+                    small = RenderTexture.GetTemporary(Mathf.Max(4, w / 8), Mathf.Max(4, h / 8), 0, RenderTextureFormat.ARGB32);
+                    small.filterMode = FilterMode.Bilinear;
+                    blurred = new RenderTexture(Mathf.Max(4, w / 24), Mathf.Max(4, h / 24), 0, RenderTextureFormat.ARGB32);
+                    blurred.filterMode = FilterMode.Bilinear; blurred.wrapMode = TextureWrapMode.Clamp;
+                    blurred.Create();
+                    Graphics.Blit(screen, small);
+                    Graphics.Blit(small, blurred);
                 }
             }
             catch (Exception ex)
@@ -149,9 +157,8 @@ namespace Volas
             }
             finally
             {
-                if (a != null) RenderTexture.ReleaseTemporary(a);
-                if (b != null) RenderTexture.ReleaseTemporary(b);
-                if (screen != null) UnityEngine.Object.Destroy(screen);
+                if (screen != null) RenderTexture.ReleaseTemporary(screen);
+                if (small != null) RenderTexture.ReleaseTemporary(small);
                 if (!disposed && stillOpen()) { UpdateBackdrop(); ready(); }
             }
         }
@@ -160,18 +167,24 @@ namespace Volas
         {
             if (disposed || glass == null) return;
             bool enabled = plugin.Settings.DesktopGlass.Value;
-            grain.enabled = enabled;
             float blend = plugin.Settings.DesktopBlurStrength.Value;
-            grain.color = new Color(1f, 1f, 1f, .045f * blend);
-            glass.enabled = enabled && blurred != null;
-            if (!glass.enabled) return;
-            glass.texture = blurred;
-            glass.color = new Color(.65f, .72f, 1f, .62f * blend);
+            if (lastGlassEnabled != enabled || lastBlend != blend)
+            {
+                lastGlassEnabled = enabled; lastBlend = blend;
+                grain.enabled = enabled && blend > 0f;
+                grain.color = new Color(1f, 1f, 1f, .035f * blend);
+                glass.color = new Color(.65f, .72f, 1f, .62f * blend);
+            }
+            bool show = enabled && blurred != null && blend > 0f;
+            if (glass.enabled != show) glass.enabled = show;
+            if (!show) return;
+            if (glass.texture != blurred) glass.texture = blurred;
             window.GetWorldCorners(corners);
             Vector2 min = RectTransformUtility.WorldToScreenPoint(null, corners[0]);
             Vector2 max = RectTransformUtility.WorldToScreenPoint(null, corners[2]);
             float w = Mathf.Max(1, Screen.width), h = Mathf.Max(1, Screen.height);
-            glass.uvRect = new Rect(min.x / w, min.y / h, (max.x - min.x) / w, (max.y - min.y) / h);
+            var uv = new Rect(min.x / w, min.y / h, (max.x - min.x) / w, (max.y - min.y) / h);
+            if (uv != lastUv || glass.uvRect != uv) { lastUv = uv; glass.uvRect = uv; }
         }
 
         internal void ClearBackdrop()
@@ -246,7 +259,6 @@ namespace Volas
         private VolasDesktopEffects effects;
         private VolasPlugin plugin;
         private Button button;
-        private bool held;
         internal void Initialize(VolasDesktopEffects fx, VolasPlugin owner, Button target)
         {
             effects = fx; plugin = owner; button = target;
@@ -256,21 +268,19 @@ namespace Volas
         #region Pointer interaction
 
         public void OnPointerEnter(PointerEventData eventData) { if (button != null && button.IsInteractable()) effects.Play(0); }
-        public void OnPointerExit(PointerEventData eventData) { held = false; }
-        public void OnPointerDown(PointerEventData eventData) { if (eventData.button == PointerEventData.InputButton.Left && button != null && button.IsInteractable()) held = true; }
-        public void OnPointerUp(PointerEventData eventData) { held = false; }
+        public void OnPointerExit(PointerEventData eventData) { ResetPress(); }
+        public void OnPointerDown(PointerEventData eventData)
+        {
+            if (eventData.button == PointerEventData.InputButton.Left && button != null && button.IsInteractable() && plugin.Settings.DesktopMotion.Value)
+                transform.localScale = new Vector3(.985f, .985f, 1f);
+        }
+        public void OnPointerUp(PointerEventData eventData) { ResetPress(); }
         #endregion
 
         #region Motion & reset
 
-        private void Update()
-        {
-            if (plugin == null) return;
-            float target = held && plugin.Settings.DesktopMotion.Value ? .985f : 1f;
-            float scale = plugin.Settings.DesktopMotion.Value ? Mathf.MoveTowards(transform.localScale.x, target, Time.unscaledDeltaTime * .4f) : 1f;
-            transform.localScale = new Vector3(scale, scale, 1f);
-        }
-        private void OnDisable() { held = false; transform.localScale = Vector3.one; }
+        private void ResetPress() { if (transform.localScale != Vector3.one) transform.localScale = Vector3.one; }
+        private void OnDisable() { ResetPress(); }
 
         #endregion
     }

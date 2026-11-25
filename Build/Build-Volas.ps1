@@ -6,8 +6,8 @@ param(
 )
 $ErrorActionPreference = "Stop"
 $projectRoot = Split-Path -Parent $PSScriptRoot
-if ($Framework -and $Framework -notin @("net472", "netstandard2.1")) {
-    throw "Unsupported framework: $Framework. Use net472 or netstandard2.1."
+if ($Framework -and $Framework -ne "netstandard2.1") {
+    throw "Current Volas requires netstandard2.1 (Unity AudioModule requires netstandard 2.1). Omit -Framework or use netstandard2.1."
 }
 function Test-GorillaTag([string]$path) {
     return ($path -and (Test-Path -LiteralPath (Join-Path $path "Gorilla Tag_Data\Managed\UnityEngine.CoreModule.dll")))
@@ -132,48 +132,29 @@ $props = @"
 </Project>
 "@
 Set-Content -LiteralPath (Join-Path $projectRoot "Volas.Local.props") -Value $props -Encoding UTF8
-# Unity versions differ in their managed runtime profile. When no framework is forced,
-# try the detected target first and fall back to the other supported target on build failure.
-# BepInEx 5 Mono is commonly built against .NET Framework.  Presence of
-# netstandard.dll alone does not establish the correct target framework.
-$candidates = if ($Framework) {
-    @($Framework)
-} else {
-    @("net472", "netstandard2.1")
-}
-Write-Host "Building the ENTIRE Volas.sln into one Volas.dll..." -ForegroundColor Cyan
+$Framework = "netstandard2.1"
+Write-Host "Building the ENTIRE Volas.sln into one Volas.dll ($Framework)..." -ForegroundColor Cyan
 Write-Host "Game: $selected"
 Write-Host "Unity assemblies found: $(@(Get-ChildItem -LiteralPath $managed -Filter 'UnityEngine*.dll').Count)"
 Write-Host "Source folders: Core, Features, Game, GunLib, Settings, UI, src"
-$built = $false
-foreach ($candidate in $candidates) {
-    Write-Host "Trying target framework: $candidate" -ForegroundColor Cyan
-    $argsList = @(
-        "build", (Join-Path $projectRoot "Volas.sln"), "-c", "Release",
-        "--nologo", "--no-incremental", "-p:GorillaTagDir=$selected",
-        "-p:VolasTargetFramework=$candidate"
-    )
-    if ($UnityEngineFacadePath) { $argsList += "-p:UnityEngineFacadePath=$UnityEngineFacadePath" }
-    if ($Install) { $argsList += "-p:InstallToGame=true" }
-    & dotnet @argsList
-    if ($LASTEXITCODE -eq 0) {
-        $Framework = $candidate
-        $built = $true
-        break
-    }
-    if (-not $Framework) {
-        Write-Warning "Build failed for $candidate. Attempting the other supported framework."
-    }
+$netstandard = Join-Path $managed "netstandard.dll"
+if (Test-Path -LiteralPath $netstandard) {
+    Write-Host "Game runtime facade: $([System.Reflection.AssemblyName]::GetAssemblyName($netstandard).FullName)"
 }
-if (-not $built) {
-    throw "Volas could not build with the installed game assemblies. Copy the FIRST CS error from the output and check Docs/TROUBLESHOOTING.md. Ensure BepInEx 5 Mono matches this installed game."
+$argsList = @("build", (Join-Path $projectRoot "Volas.sln"), "-c", "Release",
+    "--nologo", "--no-incremental", "-p:GorillaTagDir=$selected",
+    "-p:UnityEngineFacadePath=$UnityEngineFacadePath")
+if ($Install) { $argsList += "-p:InstallToGame=true" }
+& dotnet @argsList
+if ($LASTEXITCODE -ne 0) {
+    throw "Volas could not build against netstandard2.1. Check the first compiler error and matching installed Unity/BepInEx assemblies."
 }
+
 # Visual Studio should use the SAME framework that succeeded here.
 $props = @"
 <Project>
   <PropertyGroup>
     <GorillaTagDir>$escaped</GorillaTagDir>
-    <VolasTargetFramework>$Framework</VolasTargetFramework>
     <UnityEngineFacadePath>$facadeXml</UnityEngineFacadePath>
   </PropertyGroup>
 </Project>

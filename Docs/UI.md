@@ -44,3 +44,7 @@ The project currently registers **72** feature entries: 55 original entries plus
 ## Desktop effects
 
 F6 retains the existing sidebar and compact two-column layout. Settings → UI Effects / Audio controls acrylic, bloom, motion and sound separately. Acrylic captures a local in-memory desktop scene snapshot before the window opens, downsamples it on the GPU, and crops it to the window. The snapshot is refreshed on reopening and discarded on closing. When capture is unsupported, the menu uses the frosted grain background instead. Bloom is a procedural UI-only soft glow, not HDR scene bloom. Hover/click/open/close tones are synthesized locally; no sound files, global audio changes or Photon voice changes. All controls are saved in the existing BepInEx configuration.
+
+## GUI performance pass
+
+The current desktop menu uses in-place feature row and sidebar state updates, debounced search, conditional canvas property writes, event-driven button feedback and GPU-only acrylic snapshot capture. If GPU screenshot capture is unavailable, the frosted tint remains without synchronous CPU pixel readback. Favorite/Enabled filters rebuild only when membership changes. Real frame times require testing in the installed game.

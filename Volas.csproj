@@ -10,10 +10,10 @@
     <UnityEngineFacadePath Condition="'$(UnityEngineFacadePath)' == '' and Exists('$(ManagedDir)\UnityEngine.dll')">$(ManagedDir)\UnityEngine.dll</UnityEngineFacadePath>
     <UnityEngineFacadePath Condition="'$(UnityEngineFacadePath)' == '' and Exists('$(BepInExDir)\UnityEngine.dll')">$(BepInExDir)\UnityEngine.dll</UnityEngineFacadePath>
     <UnityEngineFacadePath Condition="'$(UnityEngineFacadePath)' == '' and Exists('$(GorillaTagDir)\BepInEx\plugins\UnityEngine.dll')">$(GorillaTagDir)\BepInEx\plugins\UnityEngine.dll</UnityEngineFacadePath>
-    <!-- BepInEx 5 Mono normally works with .NET Framework.  Do NOT infer
-         netstandard2.1 only because Unity ships a netstandard facade. -->
-    <TargetFramework>net472</TargetFramework>
-    <TargetFramework Condition="'$(VolasTargetFramework)' != ''">$(VolasTargetFramework)</TargetFramework>
+    <!-- Current Gorilla Tag Unity assemblies, including AudioModule, depend on
+         netstandard 2.1. Ignore stale net472 values in old Volas.Local.props.
+         Use the SDK's matching reference pack, not the game's runtime facade. -->
+    <TargetFramework>netstandard2.1</TargetFramework>
     <LangVersion>latest</LangVersion>
     <Nullable>disable</Nullable>
     <AssemblyName>Volas</AssemblyName>

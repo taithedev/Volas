@@ -21,12 +21,12 @@ Try these in order:
 1. Pull current `main` in Visual Studio (**Git → Pull**). Open `Volas.sln`, not a folder.
 2. Close the game. Run `build.bat` to locate the installed game folder. If not found, pass `-GamePath "FULL_PATH_TO_GAME"`.
 3. Ensure **BepInEx 5 Mono**, not an IL2CPP-only loader, matches this installation.
-4. If automatic targeting fails, run `build.bat -Framework netstandard2.1`; alternatively `build.bat -Framework net472` if compatible.
+4. Current Volas targets `netstandard2.1`. Run `build.bat` or `build.bat -Framework netstandard2.1`. Old `net472` values in local props are ignored.
 5. In Visual Studio **Build → Clean Solution**, then **Rebuild Solution**. You may delete `bin/` and `obj/` if they contain stale outputs.
 6. Run `powershell -ExecutionPolicy Bypass -File .\\Build\\Diagnose-References.ps1 -GamePath "FULL_PATH_TO_GAME"` to see which **UnityEngine.dll** and uGUI DLLs exist.
 7. Read the **full first CS0012 line** in Output; its named assembly is the exact dependency that must be reconciled. When the error says `UnityEngine, Version=0.0.0.0`, use a UnityEngine.dll facade from the **same compatible game/BepInEx environment**, not a random Unity version. You can supply `build.bat -UnityEngineFacadePath "FULL_PATH_TO_UnityEngine.dll"`; the root wrapper now forwards this argument and persists it in `Volas.Local.props`. The build checks the DLL assembly identity, reports the BepInEx expected UnityEngine identity when available, and stops early if the facade is missing rather than producing repeated CS0012 errors.
 
-The script tries both supported target frameworks automatically unless you force one. A failed local build cannot be diagnosed completely from a truncated error line.
+The script builds against the .NET Standard 2.1 SDK reference pack. A failed local build cannot be diagnosed completely from a truncated error line.
 
 ## Missing reference DLL
 
@@ -78,3 +78,7 @@ Share the **first full error line**, framework target, and the named missing ass
 Ensure a valid left-hand controller, right-hand controller and headset are tracked. Press **left Y** to open. Aim at a menu button and press the **right trigger**, or touch a raised button using the right controller tip. Hovered buttons change shade and the pointer appears on a hit. If button text or a material fails to render, review `BepInEx/LogOutput.log`.
 
 The physical wrist menu uses scene-created meshes, not a Unity Editor prefab, and requires no inspector wiring. The DLL must still be compiled and tested locally against the installed game version.
+
+## CS1705: UnityEngine.AudioModule requires netstandard 2.1
+
+Pull the latest project, close Gorilla Tag, clean the solution and run `build.bat -Install`. Current Volas targets `netstandard2.1` directly, including in Visual Studio. The SDK supplies its matching reference assembly; do not copy runtime netstandard DLLs into the project or manually add a 2.0 reference. Install a current .NET SDK if the reference pack is missing. An old `Volas.Local.props` framework setting no longer overrides the target.
