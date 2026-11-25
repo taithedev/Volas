@@ -41,3 +41,7 @@ Surface decorations have bounded lifetimes and are cleared with reset. Grapple a
 - `UI/Desktop/DesktopMenu.cs`: pointer appearance editor.
 
 This is source-only until it builds with a specific installation of Gorilla Tag and BepInEx 5 Mono. A successful C# compilation does not guarantee game or headset compatibility.
+
+## v1.8.1 pointer recovery
+
+Enable Projectiles > Pointer preview, close the menu, then hold the selected controller's grip. GunLib uses GTPlayer hand wrappers (controllerTransform), legacy transform fields, the controller input poller and Unity XR device fallback. Trigger callbacks run once per new press on a valid stationary surface; existing hold-trigger tools still use TriggerHeld. Beam and reticle objects are reused and hidden on release. The supplied example inspired the input and lifecycle design; Volas does not copy its per-frame GameObject creation or game rig/holdable manipulation. No game network messages are added. Test both hands in VR after rebuilding.

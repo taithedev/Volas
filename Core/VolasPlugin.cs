@@ -161,7 +161,7 @@ namespace Volas
             lastVrButton = vrPressed;
 
             RunSystem("Feature registry", Features.Tick);
-            try { Gun.Tick(!VrOpen && !DesktopOpen && !LegacyDesktopOpen && !Licensing.PanelOpen && (Guns.AnyEnabled || CreativeGun.AnyEnabled)); }
+            try { Gun.Tick(!VrOpen && !DesktopOpen && !LegacyDesktopOpen && !Licensing.PanelOpen && (Gun.Preview || Guns.AnyEnabled || CreativeGun.AnyEnabled)); }
             catch (Exception ex) { Gun.Reset(); ReportSystemFault("GunLib", ex); }
             RunSystem("Pointer effects", Guns.Tick);
             RunSystem("Creative effects", CreativeGun.Tick);

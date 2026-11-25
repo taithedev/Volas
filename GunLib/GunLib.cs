@@ -32,7 +32,11 @@ namespace Volas
         private LineRenderer reticleCircle;
         private Material circleMaterial;
         private int currentReticleStyle = -1;
-        private bool previousTrigger;
+        private bool previousTrigger, wasAiming, triggerArmed;
+        private readonly System.Collections.Generic.List<InputDevice> controllers = new System.Collections.Generic.List<InputDevice>(4);
+        internal bool Preview { get; set; }
+        internal string Status { get; private set; } = "Inactive";
+        private float nextShaderWarning;
 
         public static GunLib Instance { get; private set; }
         public bool IsAiming { get; private set; }
@@ -54,39 +58,38 @@ namespace Volas
             TriggerHeld = false;
             Target = default(GunTarget);
 
-            var node = plugin.Settings.GunLeftHand.Value ? XRNode.LeftHand : XRNode.RightHand;
-            var controller = InputDevices.GetDeviceAtXRNode(node);
-            bool grip = false;
-            bool trigger = false;
-            if (controller.isValid)
+            if (!enabled)
             {
-                if (!controller.TryGetFeatureValue(CommonUsages.gripButton, out grip))
-                {
-                    float gripValue;
-                    if (controller.TryGetFeatureValue(CommonUsages.grip, out gripValue))
-                        grip = gripValue > 0.55f;
-                }
-
-                if (!controller.TryGetFeatureValue(CommonUsages.triggerButton, out trigger))
-                {
-                    float triggerValue;
-                    if (controller.TryGetFeatureValue(CommonUsages.trigger, out triggerValue))
-                        trigger = triggerValue > 0.55f;
-                }
-            }
-
-            var hand = plugin.Settings.GunLeftHand.Value ? plugin.Game.LeftHand : plugin.Game.RightHand;
-            if (!enabled || !controller.isValid || hand == null || !grip)
-            {
-                HideVisuals();
-                previousTrigger = trigger;
+                Reset();
+                Status = "Inactive";
                 return;
             }
 
+            bool left = plugin.Settings.GunLeftHand.Value;
+            bool grip, trigger;
+            bool inputAvailable = ReadController(left, out grip, out trigger);
+            Transform hand = left ? plugin.Game.LeftHand : plugin.Game.RightHand;
+            if (!inputAvailable || hand == null || !grip)
+            {
+                HideVisuals();
+                wasAiming = false;
+                triggerArmed = false;
+                previousTrigger = trigger;
+                Status = hand == null ? "Waiting for tracked hand" : !inputAvailable ? "Waiting for controller input" : "Hold grip to aim";
+                return;
+            }
+
+            if (!wasAiming)
+            {
+                wasAiming = true;
+                triggerArmed = !trigger;
+                previousTrigger = trigger;
+            }
+            if (!trigger) triggerArmed = true;
             IsAiming = true;
             TriggerHeld = trigger;
-            Vector3 origin = hand.position - hand.up * 0.025f;
             Vector3 direction = plugin.Settings.GunUseForward.Value ? hand.forward : -hand.up;
+            Vector3 origin = hand.position + direction * 0.025f;
             direction.Normalize();
             float limit = plugin.Settings.GunDistance.Value;
 
@@ -125,14 +128,52 @@ namespace Volas
             Target = target;
             DrawPointer(origin, target);
 
-            FiredThisFrame = trigger && !previousTrigger;
+            Status = target.HasHit ? "Aiming at surface" : "No surface hit";
+            FiredThisFrame = triggerArmed && trigger && !previousTrigger;
             previousTrigger = trigger;
-            if (FiredThisFrame)
+            if (FiredThisFrame && target.HasHit && Fired != null)
             {
-                try { Fired?.Invoke(target); }
-                catch (Exception ex) { plugin.Log.LogError("GunLib callback failed: " + ex); }
+                foreach (Delegate callback in Fired.GetInvocationList())
+                {
+                    try { ((Action<GunTarget>)callback)(target); }
+                    catch (Exception ex) { plugin.Log.LogError("GunLib callback failed: " + ex); }
+                }
             }
         }
+
+        #region Controller input
+
+        private bool ReadController(bool left, out bool grip, out bool trigger)
+        {
+            grip = false; trigger = false;
+            string prefix = left ? "leftController" : "rightController";
+            bool gripKnown = plugin.Game.TryControllerButton(prefix + "GripButton", out grip);
+            bool triggerKnown = plugin.Game.TryControllerButton(prefix + "TriggerButton", out trigger);
+            float value;
+            if (plugin.Game.TryControllerFloat(prefix + "GripFloat", out value))
+            { grip = grip || value >= .55f; gripKnown = true; }
+            if (plugin.Game.TryControllerFloat(prefix + "IndexFloat", out value))
+            { trigger = trigger || value >= .55f; triggerKnown = true; }
+            InputDevice device = InputDevices.GetDeviceAtXRNode(left ? XRNode.LeftHand : XRNode.RightHand);
+            if (!device.isValid)
+            {
+                controllers.Clear();
+                InputDevices.GetDevicesWithCharacteristics(InputDeviceCharacteristics.Controller |
+                    (left ? InputDeviceCharacteristics.Left : InputDeviceCharacteristics.Right), controllers);
+                foreach (var candidate in controllers) if (candidate.isValid) { device = candidate; break; }
+            }
+            if (device.isValid)
+            {
+                bool pressed;
+                if (device.TryGetFeatureValue(CommonUsages.gripButton, out pressed)) { grip |= pressed; gripKnown = true; }
+                if (device.TryGetFeatureValue(CommonUsages.grip, out value)) { grip |= value >= .55f; gripKnown = true; }
+                if (device.TryGetFeatureValue(CommonUsages.triggerButton, out pressed)) { trigger |= pressed; triggerKnown = true; }
+                if (device.TryGetFeatureValue(CommonUsages.trigger, out value)) { trigger |= value >= .55f; triggerKnown = true; }
+            }
+            return gripKnown && triggerKnown;
+        }
+
+        #endregion
 
         private bool IsLocalPlayerCollider(Collider candidate)
         {
@@ -148,8 +189,7 @@ namespace Volas
             EnsureVisuals();
             if (beam == null || reticle == null || haloBeam == null || reticleCircle == null)
                 return;
-            beam.gameObject.SetActive(true);
-            reticle.SetActive(true);
+            if (!beam.gameObject.activeSelf) beam.gameObject.SetActive(true);
             float width = plugin.Settings.GunBeamWidth.Value;
             float t = Time.unscaledTime * plugin.Settings.GunAnimationSpeed.Value;
             float pulse = plugin.Settings.GunPulse.Value ? (0.82f + 0.18f * Mathf.Sin(t * 4f)) : 1f;
@@ -159,7 +199,8 @@ namespace Volas
                 ? Color.HSVToRGB(Mathf.Repeat(t * 0.05f, 1f), 0.85f, 1f)
                 : (target.HasHit ? plugin.Accent : new Color(1f, 0.45f, 0.45f));
             if (TriggerHeld && !plugin.Settings.GunRainbow.Value) color = Color.white;
-            beamMaterial.color = color;
+            beamMaterial.color = Color.white;
+            beam.startColor = beam.endColor = color;
 
             int style = plugin.Settings.GunBeamStyle.Value;
             int count = style == 0 ? 2 : 30;
@@ -184,16 +225,18 @@ namespace Volas
                     position += (side * Mathf.Cos(spin) + up * Mathf.Sin(spin)) * 0.045f * taper;
                 }
                 beam.SetPosition(i, position);
-                haloBeam.SetPosition(i, position);
+                if (plugin.Settings.GunGlow.Value) haloBeam.SetPosition(i, position);
             }
 
             haloBeam.gameObject.SetActive(plugin.Settings.GunGlow.Value);
             haloBeam.startWidth = width * 3.3f * pulse;
             haloBeam.endWidth = width * 1.6f * pulse;
-            haloMaterial.color = new Color(color.r, color.g, color.b, 0.17f);
+            haloMaterial.color = Color.white;
+            haloBeam.startColor = haloBeam.endColor = new Color(color.r, color.g, color.b, .17f);
 
             int reticleStyle = plugin.Settings.GunReticleStyle.Value;
             if (reticleStyle != currentReticleStyle) ConfigureReticle(reticleStyle);
+            if (reticle == null || reticleMaterial == null) return;
             var reticlePoint = target.Point + target.Normal * 0.015f;
             reticle.transform.position = reticlePoint;
             reticle.transform.localScale = Vector3.one *
@@ -208,7 +251,8 @@ namespace Volas
             reticleCircle.gameObject.SetActive(reticleStyle == 2);
             if (reticleStyle == 2)
             {
-                circleMaterial.color = color;
+                circleMaterial.color = Color.white;
+                reticleCircle.startColor = reticleCircle.endColor = color;
                 var rotation = Quaternion.LookRotation(target.Normal, Vector3.up);
                 float radius = plugin.Settings.GunReticleSize.Value * 0.58f * pulse;
                 for (int i = 0; i < 40; i++)
@@ -228,32 +272,39 @@ namespace Volas
                          Shader.Find("Standard");
             if (shader == null)
             {
-                plugin.Log.LogWarning("GunLib: no compatible local shader available.");
+                if (Time.unscaledTime >= nextShaderWarning)
+                {
+                    nextShaderWarning = Time.unscaledTime + 10f;
+                    plugin.Log.LogWarning("GunLib: no compatible local shader available.");
+                }
                 return;
             }
 
             if (reticle == null)
             {
-                reticleMaterial = new Material(shader);
+                if (reticleMaterial == null) reticleMaterial = new Material(shader);
                 ConfigureReticle(plugin.Settings.GunReticleStyle.Value);
             }
 
             if (beam == null)
             {
                 beam = CreateLine("Volas GunLib luminous beam", shader, false, 2);
-                beamMaterial = beam.material;
+                if (beamMaterial != null) UnityEngine.Object.Destroy(beamMaterial);
+                beamMaterial = beam.sharedMaterial;
             }
             if (haloBeam == null)
             {
                 haloBeam = CreateLine("Volas GunLib soft glow", shader, false, 2);
-                haloMaterial = haloBeam.material;
+                if (haloMaterial != null) UnityEngine.Object.Destroy(haloMaterial);
+                haloMaterial = haloBeam.sharedMaterial;
             }
             if (reticleCircle == null)
             {
                 reticleCircle = CreateLine("Volas GunLib ring reticle", shader, true, 40);
                 reticleCircle.startWidth = 0.009f;
                 reticleCircle.endWidth = 0.009f;
-                circleMaterial = reticleCircle.material;
+                if (circleMaterial != null) UnityEngine.Object.Destroy(circleMaterial);
+                circleMaterial = reticleCircle.sharedMaterial;
                 reticleCircle.gameObject.SetActive(false);
             }
         }
@@ -267,13 +318,14 @@ namespace Volas
             line.useWorldSpace = true;
             line.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             line.receiveShadows = false;
-            line.material = new Material(shader);
+            line.sharedMaterial = new Material(shader);
+            go.SetActive(false);
             return line;
         }
 
         private void ConfigureReticle(int style)
         {
-            if (reticle != null) UnityEngine.Object.Destroy(reticle);
+            if (reticle != null) { reticle.SetActive(false); UnityEngine.Object.Destroy(reticle); reticle = null; }
             Shader shader = Shader.Find("Sprites/Default") ??
                             Shader.Find("Unlit/Color") ?? Shader.Find("Standard");
             if (shader == null) return;
@@ -283,7 +335,8 @@ namespace Volas
             var collider = reticle.GetComponent<Collider>();
             if (collider != null) collider.enabled = false;
             if (reticleMaterial == null) reticleMaterial = new Material(shader);
-            reticle.GetComponent<Renderer>().material = reticleMaterial;
+            reticle.GetComponent<Renderer>().sharedMaterial = reticleMaterial;
+            reticle.SetActive(false);
             currentReticleStyle = style;
         }
 
@@ -298,6 +351,8 @@ namespace Volas
         internal void Reset()
         {
             previousTrigger = false;
+            wasAiming = false; triggerArmed = false;
+            Target = default(GunTarget);
             IsAiming = false;
             TriggerHeld = false;
             FiredThisFrame = false;

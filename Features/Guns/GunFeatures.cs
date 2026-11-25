@@ -4,6 +4,7 @@ namespace Volas
     {
         internal static void Register(FeatureRegistry registry)
         {
+            registry.Add(new Feature("gun_preview", "Gun Mods", "Pointer preview", "Test the local grip-controlled pointer without placing objects.", p => p.Gun.Preview = true, p => p.Gun.Preview = false));
             registry.Add(new Feature(
                 "gun_marker", "Gun Mods", "Marker gun", "Place a local luminous marker on a surface.",
                 p => { p.Guns.Marker = true; },

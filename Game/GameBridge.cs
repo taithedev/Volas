@@ -127,10 +127,15 @@ namespace Volas
         {
             if (Player != null)
             {
-                object fromPlayer = GetMember(Player.GetType(), Player, names);
-                Transform resolved = fromPlayer as Transform ??
-                    (fromPlayer as GameObject)?.transform;
-                if (resolved != null) return resolved;
+                bool left = names == leftNames;
+                object wrapper = GetMember(Player.GetType(), Player, left ? "LeftHand" : "RightHand");
+                Transform nested = ResolveControllerTransform(wrapper);
+                if (nested != null) return nested;
+                foreach (string name in names)
+                {
+                    Transform resolved = ResolveControllerTransform(GetMember(Player.GetType(), Player, name));
+                    if (resolved != null) return resolved;
+                }
             }
 
             // Some GT builds expose controller transforms on GorillaTagger
@@ -143,10 +148,11 @@ namespace Volas
                     "Instance", "instance");
                 if (tagger != null)
                 {
-                    object fromTagger = GetMember(tagger.GetType(), tagger, names);
-                    Transform hand = fromTagger as Transform ??
-                        (fromTagger as GameObject)?.transform;
-                    if (hand != null) return hand;
+                    foreach (string name in names)
+                    {
+                        Transform hand = ResolveControllerTransform(GetMember(tagger.GetType(), tagger, name));
+                        if (hand != null) return hand;
+                    }
                 }
             }
             return null;
@@ -170,6 +176,17 @@ namespace Volas
             if (state == null) return false;
             try { value = Convert.ToSingle(state); return true; }
             catch { return false; }
+        }
+
+        private static Transform ResolveControllerTransform(object value)
+        {
+            if (value == null || (value is UnityEngine.Object unityObject && unityObject == null)) return null;
+            if (value is Transform direct) return direct;
+            if (value is GameObject obj) return obj.transform;
+            object nested = GetMember(value.GetType(), value, "controllerTransform");
+            if (nested is Transform controller && controller != null) return controller;
+            if (nested is GameObject controllerObject && controllerObject != null) return controllerObject.transform;
+            return null;
         }
 
         private object ReadPollerMember(string memberName)
