@@ -84,7 +84,7 @@ namespace Volas
         private static readonly string[] Tabs =
         {
             "Home", "Players", "#MODS", "Movement", "Visuals", "Gamemode",
-            "Fun", "Projectiles", "Custom Categories", "Zones", "#POWER",
+            "Fun", "Charms", "Charm Studio", "Projectiles", "Custom Categories", "Zones", "#POWER",
             "VR Rig", "Overpowered", "Master", "Global", "#LIBRARY",
             "Local", "Favorites", "Enabled", "All", "Plugin", "Safety"
         };
@@ -430,6 +430,7 @@ namespace Volas
                 lastStatusUpdate = Time.unscaledTime;
                 string message = currentPage == "Home" ? "" : plugin.Features.LastMessage;
                 if (currentPage == "Settings" && plugin.Vr != null) message = plugin.Vr.Status + "  |  Y / F7";
+                if (currentPage == "Player ESP") message = plugin.Markers.Status;
                 if (statusText.text != message) statusText.text = message;
             }
         }
@@ -517,7 +518,7 @@ namespace Volas
             drawnRevision = plugin.Features.Revision;
             drawnPage = currentPage;
             pageTitle.text = string.IsNullOrWhiteSpace(currentQuery) ? currentPage.ToLowerInvariant() : "search results";
-            if (string.IsNullOrEmpty(currentQuery) && (currentPage == "Home" || currentPage == "Settings" || currentPage == "Wrist Layout" || currentPage == "Player ESP" || currentPage == "Gun Studio" || currentPage == "UI Effects"))
+            if (string.IsNullOrEmpty(currentQuery) && (currentPage == "Home" || currentPage == "Settings" || currentPage == "Wrist Layout" || currentPage == "Player ESP" || currentPage == "Gun Studio" || currentPage == "UI Effects" || currentPage == "Charm Studio"))
                 featureScroll = null;
             featureRows.Clear();
             DestroyChildren(pageRoot);
@@ -526,6 +527,8 @@ namespace Volas
                 DrawHome();
             else if (string.IsNullOrEmpty(currentQuery) && currentPage == "Settings")
                 DrawSettingsPage();
+            else if (string.IsNullOrEmpty(currentQuery) && currentPage == "Charm Studio")
+                DrawCharmStudio();
             else if (string.IsNullOrEmpty(currentQuery) && currentPage == "UI Effects")
                 DrawEffectsPage();
             else if (string.IsNullOrEmpty(currentQuery) && currentPage == "Wrist Layout")
@@ -720,6 +723,24 @@ namespace Volas
             MakeSlider(pageRoot, "Width", 14f, 288f, 330f, .005f, .04f, plugin.Settings.MarkerWidth.Value, v => plugin.Settings.MarkerWidth.Value = v);
             MakeButton(pageRoot, "Back", "BACK TO SETTINGS", 390f, 50f, 250f, 40f, panelColor, () => Navigate("Settings"), white, 11);
             MakeButton(pageRoot, "Visuals", "OPEN VISUAL FEATURES", 390f, 100f, 250f, 40f, panelColor, () => Navigate("Visuals"), white, 11);
+            MakeButton(pageRoot, "Preview", plugin.Markers.Preview ? "STOP LOCAL PREVIEW" : "TEST LOCAL PREVIEW", 390f, 150f, 250f, 40f, hoverColor, () => { plugin.Features.Activate(plugin.Features.Find("marker_preview")); RedrawPage(); }, white, 11);
+            MakeText(pageRoot, "Depth-tested markers only.", 390f, 206f, 300f, 34f, 11, muted);
+        }
+
+        private void DrawCharmStudio()
+        {
+            var s = plugin.Settings;
+            MakeText(pageRoot, "Charm studio / local cosmetics", 12f, 5f, 680f, 30f, 15, white, true);
+            MakeText(pageRoot, "Size", 14f, 52f, 320f, 20f, 12, muted);
+            MakeSlider(pageRoot, "Charm size", 14f, 76f, 320f, .5f, 1.8f, s.CharmScale.Value, v => s.CharmScale.Value = v);
+            MakeText(pageRoot, "Color hue", 14f, 118f, 320f, 20f, 12, muted);
+            MakeSlider(pageRoot, "Charm hue", 14f, 142f, 320f, 0f, 1f, s.CharmHue.Value, v => s.CharmHue.Value = v);
+            MakeText(pageRoot, "Animation speed", 14f, 184f, 320f, 20f, 12, muted);
+            MakeSlider(pageRoot, "Charm motion", 14f, 208f, 320f, 0f, 2f, s.CharmSpeed.Value, v => s.CharmSpeed.Value = v);
+            MakeButton(pageRoot, "Hand", s.CharmRightHand.Value ? "HAND: RIGHT" : "HAND: LEFT", 370f, 52f, 330f, 40f, panelColor, () => { s.CharmRightHand.Value = !s.CharmRightHand.Value; RedrawPage(); }, white, 12);
+            MakeButton(pageRoot, "Rainbow", s.CharmRainbow.Value ? "RAINBOW ON" : "RAINBOW OFF", 370f, 105f, 330f, 40f, panelColor, () => { s.CharmRainbow.Value = !s.CharmRainbow.Value; RedrawPage(); }, white, 12);
+            MakeButton(pageRoot, "Charms", "OPEN CHARM COLLECTION", 370f, 158f, 330f, 40f, hoverColor, () => Navigate("Charms"), white, 12);
+            MakeButton(pageRoot, "Reset", "RESET CHARM SETTINGS", 370f, 211f, 330f, 40f, panelColor, () => { s.CharmScale.Value = 1f; s.CharmHue.Value = .65f; s.CharmSpeed.Value = 1f; s.CharmRainbow.Value = false; s.CharmRightHand.Value = false; RedrawPage(); }, white, 12);
         }
 
         private void DrawGunStudio()

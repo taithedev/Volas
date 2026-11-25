@@ -43,6 +43,8 @@ namespace Volas
         internal readonly ConfigEntry<float> MarkerRefresh;
         internal readonly ConfigEntry<int> MarkerLimit;
         internal readonly ConfigEntry<float> MarkerWidth;
+        internal readonly ConfigEntry<float> CharmScale, CharmHue, CharmSpeed;
+        internal readonly ConfigEntry<bool> CharmRainbow, CharmRightHand;
         internal readonly ConfigEntry<float> VrOffsetX;
         internal readonly ConfigEntry<float> VrOffsetY;
         internal readonly ConfigEntry<float> VrOffsetZ;
@@ -113,6 +115,11 @@ namespace Volas
             DesktopMotion = config.Bind("Desktop Effects", "Animations", true, "Fade transitions and button feedback.");
             DesktopSounds = config.Bind("Desktop Effects", "UI sounds", true, "Local procedural menu sounds.");
             DesktopSoundVolume = config.Bind("Desktop Effects", "Sound volume", .25f, new ConfigDescription("UI audio volume.", new AcceptableValueRange<float>(0f, 1f)));
+            CharmScale = config.Bind("Charms", "Size", 1f, new ConfigDescription("Charm scale.", new AcceptableValueRange<float>(.5f, 1.8f)));
+            CharmHue = config.Bind("Charms", "Hue", .65f, new ConfigDescription("Charm color.", new AcceptableValueRange<float>(0f, 1f)));
+            CharmSpeed = config.Bind("Charms", "Motion speed", 1f, new ConfigDescription("Charm animation speed.", new AcceptableValueRange<float>(0f, 2f)));
+            CharmRainbow = config.Bind("Charms", "Rainbow", false);
+            CharmRightHand = config.Bind("Charms", "Right hand", false);
             MarkerRange = config.Bind("Player ESP", "Range", 25f, new ConfigDescription("Maximum marker distance in meters.", new AcceptableValueRange<float>(5f, 60f)));
             MarkerRefresh = config.Bind("Player ESP", "Refresh seconds", .20f, new ConfigDescription("Distance label and range refresh interval.", new AcceptableValueRange<float>(.10f, .75f)));
             MarkerLimit = config.Bind("Player ESP", "Marker limit", 8, new ConfigDescription("Maximum remote markers.", new AcceptableValueRange<int>(1, 12)));

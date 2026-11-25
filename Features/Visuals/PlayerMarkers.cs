@@ -9,7 +9,10 @@ namespace Volas
     internal sealed class PlayerMarkers
     {
         private readonly VolasPlugin plugin;
-        internal bool Boxes, Labels;
+        internal bool Boxes, Labels, Preview;
+        internal string Status { get; private set; } = "Markers disabled";
+        private Marker preview;
+        private Vector3 previewPosition;
         private readonly List<Marker> pool = new List<Marker>(12);
         private readonly List<Component> targets = new List<Component>(12);
         private Type rigType;
@@ -28,10 +31,11 @@ namespace Volas
 
         internal void Tick()
         {
-            if (!Boxes && !Labels) { if (active) Hide(); return; }
-            if (!plugin.Game.IsInModdedRoom()) { if (active) Hide(); return; }
-            Camera camera = plugin.Game.HeadCamera;
-            if (camera == null) { if (active) Hide(); return; }
+            Camera camera = (Boxes || Labels || Preview) ? plugin.Game.HeadCamera : null;
+            try { UpdatePreview(camera); } catch (Exception ex) { Preview = false; HidePreview(); plugin.Features.Disable(plugin.Features.Find("marker_preview")); plugin.Log.LogWarning("Marker preview: " + ex.Message); }
+            if (!Boxes && !Labels) { if (active) Hide(); Status = Preview ? "Local preview active" : "Markers disabled"; return; }
+            if (!plugin.Game.IsInModdedRoom()) { if (active) Hide(); Status = "Recognized MODDED room required"; return; }
+            if (camera == null) { if (active) Hide(); Status = "Waiting for camera"; return; }
             try
             {
                 active = true;
@@ -40,6 +44,7 @@ namespace Volas
                 {
                     nextScan = now + 1.25f;
                     Scan();
+                    nextRefresh = 0f;
                 }
                 if (now >= nextRefresh)
                 {
@@ -50,7 +55,7 @@ namespace Volas
                 {
                     Marker m = pool[i];
                     if (!m.Root.activeSelf) continue;
-                    if (m.Target == null || !m.Target.gameObject.activeInHierarchy)
+                    if (m.Target == null || !m.Target.gameObject.activeInHierarchy || (m.Target.transform.position - camera.transform.position).sqrMagnitude > plugin.Settings.MarkerRange.Value * plugin.Settings.MarkerRange.Value)
                     { m.Root.SetActive(false); continue; }
                     m.Root.transform.position = m.Target.transform.position;
                     m.Label.transform.rotation = camera.transform.rotation;
@@ -74,15 +79,15 @@ namespace Volas
             {
                 Component rig = obj as Component;
                 if (rig == null || !rig.gameObject.activeInHierarchy) continue;
-                object offline = GameBridge.GetMember(rigType, rig, "isOfflineVRRig", "isLocal");
-                if (object.Equals(offline, true)) continue;
-                object owner = GameBridge.GetMember(rigType, rig, "creator", "netPlayer", "Owner");
+                if (object.Equals(GameBridge.GetMember(rigType, rig, "isOfflineVRRig"), true) ||
+                    object.Equals(GameBridge.GetMember(rigType, rig, "isLocal"), true)) continue;
+                object owner = GameBridge.GetMember(rigType, rig, "creator") ?? GameBridge.GetMember(rigType, rig, "netPlayer") ?? GameBridge.GetMember(rigType, rig, "Owner");
                 object local = owner == null ? null : GameBridge.GetMember(owner.GetType(), owner, "IsLocal", "isLocal");
                 object view = GameBridge.GetMember(rigType, rig, "photonView");
-                if (!(local is bool) && view != null)
-                    local = GameBridge.GetMember(view.GetType(), view, "IsMine");
-                // Do not guess whether unknown rigs are remote.
-                if (!object.Equals(local, false)) continue;
+                object mine = view == null ? null : GameBridge.GetMember(view.GetType(), view, "IsMine");
+                // Exclude unknown and conflicting ownership signals.
+                if (object.Equals(local, true) || object.Equals(mine, true)) continue;
+                if (!object.Equals(local, false) && !object.Equals(mine, false)) continue;
                 targets.Add(rig);
             }
         }
@@ -94,6 +99,8 @@ namespace Volas
             float maxSq = max * max;
             int limit = plugin.Settings.MarkerLimit.Value;
             int used = 0;
+            targets.RemoveAll(t => t == null || !t.gameObject.activeInHierarchy);
+            targets.Sort((a,b) => (a.transform.position-center).sqrMagnitude.CompareTo((b.transform.position-center).sqrMagnitude));
             for (int i = 0; i < targets.Count && used < limit; i++)
             {
                 Component target = targets[i];
@@ -111,7 +118,8 @@ namespace Volas
                 if (Labels) { m.Label.text = Mathf.Sqrt(d).ToString("0.0") + " m"; m.Label.color = plugin.Accent; }
                 m.Root.SetActive(true);
             }
-            for (int i = used; i < pool.Count; i++) { pool[i].Target = null; pool[i].Root.SetActive(false); }
+            for (int i = used; i < pool.Count; i++) { pool[i].Target = null; if (pool[i].Root.activeSelf) pool[i].Root.SetActive(false); }
+            Status = rigType == null ? "VRRig type unavailable" : used + " in-range markers / " + targets.Count + " recognized rigs";
         }
 
         private Marker Create()
@@ -145,6 +153,24 @@ namespace Volas
             return new Marker { Root = root, Line = line, Label = label };
         }
 
+        #region Local preview
+        private void UpdatePreview(Camera camera)
+        {
+            if (!Preview || camera == null || !plugin.Game.IsSoloOrModdedRoom()) { HidePreview(); return; }
+            if (preview == null || preview.Root == null) preview = Create();
+            if (!preview.Root.activeSelf)
+            {
+                previewPosition = camera.transform.position + camera.transform.forward * 2.5f;
+                preview.Root.SetActive(true);
+                preview.Label.text = "PREVIEW";
+            }
+            preview.Root.transform.position = previewPosition;
+            preview.Line.startWidth = preview.Line.endWidth = plugin.Settings.MarkerWidth.Value;
+            preview.Label.transform.rotation = camera.transform.rotation;
+        }
+        private void HidePreview() { if (preview != null && preview.Root != null && preview.Root.activeSelf) preview.Root.SetActive(false); }
+        #endregion
+
         private void Hide()
         {
             active = false;
@@ -158,6 +184,8 @@ namespace Volas
             Hide();
             foreach (Marker m in pool) if (m.Root != null) UnityEngine.Object.Destroy(m.Root);
             pool.Clear();
+            if (preview != null && preview.Root != null) UnityEngine.Object.Destroy(preview.Root);
+            preview = null;
             if (material != null) UnityEngine.Object.Destroy(material);
         }
     }

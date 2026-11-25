@@ -7,6 +7,8 @@ namespace Volas
     {
         internal static void Register(FeatureRegistry registry)
         {
+            registry.Add(new Feature("marker_preview", "Visuals", "Marker preview", "Test a stationary box and label in solo or permitted modded rooms.", p => p.Markers.Preview = true, p => p.Markers.Preview = false, needsModdedRoom: true));
+            CharmFeatures.Register(registry);
             registry.Add(new Feature("marker_boxes", "Visuals", "Player ESP boxes", "Depth-tested player markers in recognized MODDED rooms only.", p => p.Markers.Boxes = true, p => p.Markers.Boxes = false, needsModdedRoom: true));
             registry.Add(new Feature("marker_labels", "Visuals", "Player ESP distance", "Distance labels in recognized MODDED rooms only.", p => p.Markers.Labels = true, p => p.Markers.Labels = false, needsModdedRoom: true));
             registry.Add(new Feature(

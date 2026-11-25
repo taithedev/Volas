@@ -23,6 +23,7 @@ namespace Volas
         internal GunEffects Guns { get; private set; }
         internal CreativeGunEffects CreativeGun { get; private set; }
         internal VisualDecorations Decorations { get; private set; }
+        internal LocalCharms Charms { get; private set; }
         internal MovementEffects Movement { get; private set; }
         internal VrMenu Vr { get; private set; }
         internal VolasConfiguration Settings { get; private set; }
@@ -93,6 +94,7 @@ namespace Volas
             Guns = new GunEffects(this);
             CreativeGun = new CreativeGunEffects(this);
             Decorations = new VisualDecorations(this);
+            Charms = new LocalCharms(this);
             Movement = new MovementEffects(this);
             Features = new FeatureRegistry(this);
             FeatureCatalog.Register(this);
@@ -151,6 +153,7 @@ namespace Volas
             Markers.Tick();
             ExtraVisuals.Tick();
             Decorations.Tick();
+            Charms.Tick();
             // Keep VR independently operational if the optional desktop UI crashes.
             try { Vr.Tick(); }
             catch (Exception ex)
@@ -267,6 +270,7 @@ namespace Volas
             if (Guns != null) Guns.Dispose();
             if (CreativeGun != null) CreativeGun.Dispose();
             if (Decorations != null) Decorations.Dispose();
+            if (Charms != null) Charms.Dispose();
             if (Gun != null) Gun.Dispose();
             if (Markers != null) Markers.Dispose();
             if (Effects != null) Effects.Dispose();

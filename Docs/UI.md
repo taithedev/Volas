@@ -48,3 +48,7 @@ F6 retains the existing sidebar and compact two-column layout. Settings → UI E
 ## GUI performance pass
 
 The current desktop menu uses in-place feature row and sidebar state updates, debounced search, conditional canvas property writes, event-driven button feedback and GPU-only acrylic snapshot capture. If GPU screenshot capture is unavailable, the frosted tint remains without synchronous CPU pixel readback. Favorite/Enabled filters rebuild only when membership changes. Real frame times require testing in the installed game.
+
+## Charm collection and marker preview
+
+Nine procedural wrist charms are available under Charms and in the physical menu categories. Charm Studio controls size, color, hand, rainbow and animation speed. Local-only cosmetics do not modify physics, network state or inventory. The marker preview is a stationary test shape in solo or permitted modded rooms. Remote markers remain depth-tested and restricted to recognized modded rooms. The status footer reports rig discovery. Runtime verification is still required.
