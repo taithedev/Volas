@@ -45,7 +45,7 @@ namespace Volas
         private readonly Sprite rounded;
         private readonly Sprite softRounded;
         private readonly DesktopIcons icons = new DesktopIcons();
-        private Text ownerTelemetry, ownerFaults;
+        private Text ownerTelemetry, ownerFaults, communityStatus;
         private InputField searchBox;
         private string currentPage = "Home";
         private string currentQuery = "";
@@ -87,7 +87,7 @@ namespace Volas
         private static readonly string[] Tabs =
         {
             "Home", "Players", "#FEATURES", "Movement", "Visuals", "Fun", "Charms", "Projectiles",
-            "#COLLECTION", "Local", "Favorites", "Enabled", "All",
+            "#COLLECTION", "Local", "Favorites", "Enabled", "All", "Community",
             "#TOOLS", "Player ESP", "Charm Studio", "Gun Studio", "Wrist Layout", "UI Effects", "Settings", "Plugin", "Safety", "Owner"
         };
 
@@ -153,7 +153,7 @@ namespace Volas
             AddAccentGlow(sidebar.rectTransform, 4f, 2f, 83f, 37f, .36f);
             AddIcon(sidebar.rectTransform, "Volas", 12f, 12f, 25f, accentGray);
             MakeText(sidebar.rectTransform, "VOLAS", 43f, 8f, 98f, 24f, 16, white, true);
-            MakeText(sidebar.rectTransform, "v1.6.0", 44f, 29f, 90f, 15f, 10, muted);
+            MakeText(sidebar.rectTransform, "v1.7.0", 44f, 29f, 90f, 15f, 10, muted);
             var brandLine = MakeImage(sidebar.rectTransform, "Brand divider", borderColor);
             Place(brandLine.rectTransform, 10f, 50f, 128f, 1f);
 
@@ -447,6 +447,7 @@ namespace Volas
                 if (currentPage == "Settings" && plugin.Vr != null) message = plugin.Vr.Status + "  |  Y / F7";
                 if (currentPage == "Player ESP") message = plugin.Markers.Status;
                 if (currentPage == "Owner") UpdateOwnerPage();
+                if (currentPage == "Community") UpdateCommunityPage();
                 if (statusText.text != message) statusText.text = message;
             }
         }
@@ -534,9 +535,9 @@ namespace Volas
             drawnRevision = plugin.Features.Revision;
             drawnPage = currentPage;
             pageTitle.text = string.IsNullOrWhiteSpace(currentQuery) ? currentPage.ToLowerInvariant() : "search results";
-            if (string.IsNullOrEmpty(currentQuery) && (currentPage == "Home" || currentPage == "Settings" || currentPage == "Wrist Layout" || currentPage == "Player ESP" || currentPage == "Gun Studio" || currentPage == "UI Effects" || currentPage == "Charm Studio" || currentPage == "Owner"))
+            if (string.IsNullOrEmpty(currentQuery) && (currentPage == "Home" || currentPage == "Settings" || currentPage == "Wrist Layout" || currentPage == "Player ESP" || currentPage == "Gun Studio" || currentPage == "UI Effects" || currentPage == "Charm Studio" || currentPage == "Owner" || currentPage == "Community"))
                 featureScroll = null;
-            ownerTelemetry = ownerFaults = null;
+            ownerTelemetry = ownerFaults = communityStatus = null;
             featureRows.Clear();
             DestroyChildren(pageRoot);
             PruneGlows();
@@ -544,6 +545,8 @@ namespace Volas
                 DrawHome();
             else if (string.IsNullOrEmpty(currentQuery) && currentPage == "Settings")
                 DrawSettingsPage();
+            else if (string.IsNullOrEmpty(currentQuery) && currentPage == "Community")
+                DrawCommunityPage();
             else if (string.IsNullOrEmpty(currentQuery) && currentPage == "Owner")
                 DrawOwnerPage();
             else if (string.IsNullOrEmpty(currentQuery) && currentPage == "Charm Studio")
@@ -564,20 +567,55 @@ namespace Volas
         {
             MakeText(pageRoot, "Your workspace", 4f, 0f, 700f, 30f, 19, white, true);
             MakeText(pageRoot, "Quick access to Volas features and tools.", 5f, 32f, 700f, 22f, 12, muted);
-            string[] pages = { "Visuals", "Movement", "Charms", "Favorites", "Enabled", "Local", "Player ESP", "UI Effects", "Owner" };
-            string[] hints = { "Local visual tools", "Permitted room tools", "Wrist cosmetics", "Saved features", "Active features", "Personal utilities", "Marker diagnostics", "Glass, bloom & audio", "Local developer tools" };
+            string[] pages = { "Visuals", "Movement", "Charms", "Favorites", "Enabled", "Community", "Player ESP", "UI Effects", "Owner" };
+            string[] hints = { "Local visual tools", "Permitted room tools", "Wrist cosmetics", "Saved features", "Active features", "Synchronized cosmetics", "Marker diagnostics", "Glass, bloom & audio", "Local developer tools" };
             for (int i = 0; i < pages.Length; i++)
             {
                 string destination = pages[i];
-                if (destination == "Owner" && !plugin.Licensing.IsOwner) continue;
+                if (destination == "Owner" && !plugin.Licensing.IsOwner) destination = "Local";
                 float x = (i % 3) * 245f, y = 67f + (i / 3) * 91f;
                 var button = MakeButton(pageRoot, "Home " + destination, "", x, y, 235f, 80f, panelColor, () => Navigate(destination));
                 var rt = button.transform as RectTransform;
                 AddIcon(rt, destination, 12f, 12f, 24f, accentGray);
                 MakeText(rt, destination, 44f, 10f, 184f, 26f, 14, white, true);
-                MakeText(rt, hints[i], 12f, 45f, 212f, 22f, 11, muted);
+                MakeText(rt, destination == "Local" ? "Personal utilities" : hints[i], 12f, 45f, 212f, 22f, 11, muted);
             }
             MakeText(pageRoot, "F6  Desktop     F5  Legacy     Y / F7  VR     End  Reset", 4f, 365f, 710f, 30f, 12, muted);
+        }
+
+        private void DrawCommunityPage()
+        {
+            MakeText(pageRoot, "Community events", 4f, 0f, 700f, 30f, 19, white, true);
+            MakeText(pageRoot, "Server-scheduled cosmetic events. Participation is optional.", 4f, 31f, 710f, 25f, 12, muted);
+            var surface = MakeImage(pageRoot, "Community event card", panelColor, softRounded, true);
+            Place(surface.rectTransform, 0f, 65f, 720f, 185f);
+            MakeText(surface.rectTransform, "LIVE EVENT", 18f, 13f, 660f, 26f, 12, accentGray, true);
+            communityStatus = MakeText(surface.rectTransform, "", 18f, 45f, 680f, 75f, 15, white, true);
+            communityStatus.horizontalOverflow = HorizontalWrapMode.Wrap;
+            var join = MakeButton(surface.rectTransform, "Participate", plugin.Licensing.CommunityEffects ? "LEAVE EVENT" : "JOIN COSMETIC EVENT", 18f, 130f, 326f, 38f, hoverColor, () =>
+            { plugin.Licensing.SetCommunityEffects(!plugin.Licensing.CommunityEffects); RedrawPage(); }, white, 12, true);
+            MakeButton(surface.rectTransform, "Refresh", "REFRESH", 356f, 130f, 344f, 38f, panelColor, () => plugin.Licensing.RefreshCloud(), white, 12);
+            MakeText(pageRoot, "Aurora / Pulse / Orbit — local rendering, shared event schedule.", 4f, 267f, 700f, 35f, 12, muted);
+            MakeText(pageRoot, "Effects appear in solo or supported modded rooms only.", 4f, 307f, 700f, 30f, 11, muted);
+            if (plugin.Licensing.IsOwner)
+            {
+                string[] presets = { "aurora", "pulse", "orbit", "stop" };
+                for (int i = 0; i < presets.Length; i++)
+                {
+                    string preset = presets[i];
+                    MakeButton(pageRoot, "Event " + preset, preset.ToUpperInvariant(), i * 183f, 356f, 171f, 42f, panelColor, () => plugin.Licensing.PublishEvent(preset), white, 12, true);
+                }
+            }
+            UpdateCommunityPage();
+        }
+
+        private void UpdateCommunityPage()
+        {
+            if (communityStatus == null) return;
+            string preset = plugin.Licensing.ActiveEvent;
+            string value = (preset.Length == 0 ? "No active event" : preset.ToUpperInvariant() + "  /  " + plugin.Licensing.EventRemaining + "s left") +
+                "\n" + (plugin.Licensing.CommunityEffects ? "Participation enabled" : "Participation disabled");
+            if (communityStatus.text != value) communityStatus.text = value;
         }
 
         private void DrawOwnerPage()
@@ -613,7 +651,7 @@ namespace Volas
 
         private string BuildOwnerReport()
         {
-            return "Volas 1.6.0\nUnity " + Application.unityVersion + "\n" +
+            return "Volas 1.7.0\nUnity " + Application.unityVersion + "\n" +
                 plugin.FramesPerSecond.ToString("0") + " FPS / " + plugin.FrameMilliseconds.ToString("0.0") + " ms\n" +
                 "Features: " + plugin.Features.All.Count + " / active: " + plugin.Features.ActiveCount + "\n" +
                 "Marker status: " + plugin.Markers.Status + "\n" + plugin.Features.CatalogStatus + "\n" +
@@ -623,10 +661,10 @@ namespace Volas
         private void UpdateOwnerPage()
         {
             if (ownerTelemetry == null || ownerFaults == null) return;
-            string runtime = "Volas 1.6.0\nUnity " + Application.unityVersion + "\n" +
+            string runtime = "Volas 1.7.0\nUnity " + Application.unityVersion + "\n" +
                 plugin.FramesPerSecond.ToString("0") + " FPS  /  " + plugin.FrameMilliseconds.ToString("0.0") + " ms\n" +
                 plugin.Features.All.Count + " registered features\n" + plugin.Features.ActiveCount + " active features\n" +
-                plugin.Markers.Status;
+                plugin.Markers.Status + "\n" + plugin.Licensing.LicenseStats;
             string health = plugin.Features.CatalogStatus + "\n\nRuntime faults: " + plugin.Features.FaultCount +
                 "\n" + plugin.Features.LastFault;
             if (ownerTelemetry.text != runtime) ownerTelemetry.text = runtime;

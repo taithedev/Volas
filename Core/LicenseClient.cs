@@ -14,6 +14,13 @@ namespace Volas
         private string token = "", role = "", key = "", status = "Enter your Volas license key.";
         private string announcement = "", announcementId = "", draft = "";
         private string licensed = "0", revoked = "0", online = "0";
+        private string eventPreset = "";
+        private float eventExpires;
+        internal bool CommunityEffects { get; set; }
+        internal string ActiveEvent { get { return Authenticated && Time.realtimeSinceStartup < eventExpires ? eventPreset : ""; } }
+        internal int EventRemaining { get { return Mathf.Max(0, Mathf.CeilToInt(eventExpires - Time.realtimeSinceStartup)); } }
+        internal string CloudStatus { get { return status; } }
+        internal string LicenseStats { get { return "Valid: " + licensed + " / revoked: " + revoked + " / opted-in online: " + online; } }
         private bool busy, sharePresence, panel = true, ownsCursor;
         private bool savedCursor;
         private CursorLockMode savedLock;
@@ -60,6 +67,7 @@ namespace Volas
         {
             ++generation; token = ""; role = ""; key = ""; busy = false;
             draft = ""; announcement = ""; announcementId = ""; toastUntil = 0f;
+            eventPreset = ""; eventExpires = 0f; CommunityEffects = false;
             RestoreCursor();
             plugin.CloseLicensedMenus();
             panel = true; status = message;
@@ -72,7 +80,7 @@ namespace Volas
             if (busy) return;
             busy = true;
             status = action == "login" ? "Verifying key..." : action == "announce" ? "Sending announcement..." : status;
-            nextHeartbeat = Time.realtimeSinceStartup + 45f;
+            nextHeartbeat = Time.realtimeSinceStartup + (CommunityEffects ? 20f : 45f) + UnityEngine.Random.Range(0f, 5f);
             plugin.StartCoroutine(Request(action, body, generation));
         }
         private IEnumerator Request(string action, string body, int attempt)
@@ -114,23 +122,31 @@ namespace Volas
                 }
                 role = fields[1]; verifiedAt = Time.realtimeSinceStartup;
                 licensed = fields[5]; revoked = fields[6]; online = fields[7];
+                int remaining;
+                if (fields.Length >= 10 && int.TryParse(fields[9], out remaining) && remaining > 0 && (fields[8] == "aurora" || fields[8] == "pulse" || fields[8] == "orbit"))
+                { eventPreset = fields[8]; eventExpires = Time.realtimeSinceStartup + Mathf.Clamp(remaining, 0, 300); }
+                else { eventPreset = ""; eventExpires = 0f; }
                 if (fields[3].Length != 0 && fields[3] != announcementId)
                 {
                     try { announcement = Encoding.UTF8.GetString(Convert.FromBase64String(fields[4])); announcementId = fields[3]; toastUntil = Time.realtimeSinceStartup + 12f; }
                     catch (FormatException) { }
                 }
-                status = action == "announce" ? "Announcement published." : "Session verified.";
+                status = action == "announce" ? "Announcement published." : action == "event" ? "Community event updated." : "Session verified.";
                 if (action == "announce") draft = "";
             }
         }
         #endregion
+
+        internal void SetCommunityEffects(bool enabled) { CommunityEffects = enabled; if (enabled) nextHeartbeat = 0f; }
+        internal void PublishEvent(string preset) { if (IsOwner && !busy) Start("event", preset); }
+        internal void RefreshCloud() { if (Authenticated && !busy) Start("heartbeat", ""); }
 
         #region Interface
         internal void Draw()
         {
             if (panel)
             {
-                float width = Mathf.Min(450f, Screen.width - 24f), height = IsOwner ? 390f : 270f;
+                float width = Mathf.Min(450f, Screen.width - 24f), height = IsOwner ? 480f : 310f;
                 bounds = new Rect((Screen.width-width)*.5f,(Screen.height-height)*.5f,width,height);
                 GUI.Box(bounds, "");
                 GUILayout.BeginArea(new Rect(bounds.x+18f,bounds.y+16f,bounds.width-36f,bounds.height-32f));
@@ -151,6 +167,9 @@ namespace Volas
                     GUILayout.Label("Role: " + role);
                     bool consent = GUILayout.Toggle(sharePresence, "Share anonymous online presence (optional)");
                     if (consent != sharePresence) { sharePresence = consent; nextHeartbeat = 0f; }
+                    bool participate = GUILayout.Toggle(CommunityEffects, "Participate in community cosmetic events");
+                    if (participate != CommunityEffects) SetCommunityEffects(participate);
+                    GUILayout.Label(ActiveEvent.Length == 0 ? "No active community event" : ActiveEvent + " / " + EventRemaining + "s left");
                     if (IsOwner)
                     {
                         GUILayout.Space(6f);
@@ -162,10 +181,16 @@ namespace Volas
                         GUI.enabled = !busy;
                         if (GUILayout.Button("Publish announcement", GUILayout.Height(32f)) && !string.IsNullOrWhiteSpace(draft)) Start("announce", draft);
                         if (GUILayout.Button("Refresh stats")) Start("heartbeat", "");
+                        GUILayout.BeginHorizontal();
+                        if (GUILayout.Button("Aurora")) PublishEvent("aurora");
+                        if (GUILayout.Button("Pulse")) PublishEvent("pulse");
+                        if (GUILayout.Button("Orbit")) PublishEvent("orbit");
+                        if (GUILayout.Button("Stop")) PublishEvent("stop");
+                        GUILayout.EndHorizontal();
                         GUI.enabled = true;
                     }
                     GUI.enabled = !busy;
-                    if (GUILayout.Button("Sign out")) Start("logout", "");
+                    if (GUILayout.Button("Sign out")) { Start("logout", ""); LoseSession("Signed out."); }
                     GUI.enabled = true;
                 }
                 GUILayout.Label(status);

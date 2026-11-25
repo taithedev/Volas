@@ -7,7 +7,7 @@ using UnityEngine.XR;
 
 namespace Volas
 {
-    [BepInPlugin("com.volas.gtag", "Volas", "1.6.0")]
+    [BepInPlugin("com.volas.gtag", "Volas", "1.7.0")]
     public sealed class VolasPlugin : BaseUnityPlugin
     {
         #region Services & runtime state
@@ -25,6 +25,7 @@ namespace Volas
         internal VisualDecorations Decorations { get; private set; }
         internal LocalCharms Charms { get; private set; }
         internal LicenseClient Licensing { get; private set; }
+        internal CommunityEffects Community { get; private set; }
         internal MovementEffects Movement { get; private set; }
         internal VrMenu Vr { get; private set; }
         internal VolasConfiguration Settings { get; private set; }
@@ -85,6 +86,7 @@ namespace Volas
             SessionStarted = Time.realtimeSinceStartup;
             Settings = new VolasConfiguration(Config);
             Licensing = new LicenseClient(this);
+            Community = new CommunityEffects(this);
             Compact = Settings.CompactMenu.Value;
             RainbowTheme = Settings.RainbowAccent.Value;
             DesktopOpen = false;
@@ -116,16 +118,17 @@ namespace Volas
             smoothFrameDelta = Mathf.Lerp(smoothFrameDelta, Mathf.Max(Time.unscaledDeltaTime, 0.00001f), 0.06f);
             FramesPerSecond = 1f / smoothFrameDelta;
             Licensing.Tick();
-            if (!Licensing.Authenticated) return;
+            if (!Licensing.Authenticated) { if (desktop != null) desktop.Tick(); return; }
             Game.Refresh();
+            Community.Tick();
 
-            if (Settings.DesktopShortcut.Value.IsDown())
+            if (!Licensing.PanelOpen && Settings.DesktopShortcut.Value.IsDown())
             {
                 LegacyDesktopOpen = false;
                 legacyDesktop?.Close();
                 DesktopOpen = !DesktopOpen;
             }
-            else if (Settings.LegacyDesktopShortcut.Value.IsDown())
+            else if (!Licensing.PanelOpen && Settings.LegacyDesktopShortcut.Value.IsDown())
             {
                 DesktopOpen = false;
                 LegacyDesktopOpen = !LegacyDesktopOpen;
@@ -139,7 +142,7 @@ namespace Volas
 
             bool vrPressed = GetLeftYPressed();
             bool testPressed = Settings.VrFallbackShortcut.Value.IsDown();
-            if ((vrPressed && !lastVrButton) || testPressed)
+            if (!Licensing.PanelOpen && ((vrPressed && !lastVrButton) || testPressed))
             {
                 VrOpen = !VrOpen;
                 Logger.LogInfo("Volas VR menu " + (VrOpen ? "opened" : "closed") +
@@ -275,6 +278,7 @@ namespace Volas
         internal void CloseLicensedMenus()
         {
             DesktopOpen = false; LegacyDesktopOpen = false; VrOpen = false;
+            if (Community != null) Community.Hide();
             if (Features != null) Features.DisableAll();
             if (Movement != null) Movement.Reset();
             try { if (desktop != null) desktop.Tick(); } catch { }
@@ -289,6 +293,7 @@ namespace Volas
 
         private void OnDestroy()
         {
+            if (Community != null) Community.Dispose();
             if (Licensing != null) Licensing.Dispose();
             if (Features != null) Features.DisableAll();
             if (Movement != null) Movement.Reset();
