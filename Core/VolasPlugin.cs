@@ -7,7 +7,7 @@ using UnityEngine.XR;
 
 namespace Volas
 {
-    [BepInPlugin("com.volas.gtag", "Volas", "1.9.1")]
+    [BepInPlugin("com.volas.gtag", "Volas", "1.9.2")]
     public sealed class VolasPlugin : BaseUnityPlugin
     {
         #region Services & runtime state
@@ -139,7 +139,7 @@ namespace Volas
                 else OpenVerifiedLegacy();
             }
 
-            if (MenuInput.Shortcut(Settings.ResetShortcut.Value, KeyCode.End))
+            if ((desktop == null || !desktop.SearchFocused) && MenuInput.Shortcut(Settings.ResetShortcut.Value, KeyCode.End))
             {
                 RunSystem("Emergency reset", Features.DisableAll);
                 Licensing.SetCommunityEffects(false);
@@ -243,6 +243,11 @@ namespace Volas
         {
             if (Licensing != null) Licensing.Draw();
             if (Licensing == null || !Licensing.Authenticated || Licensing.PanelOpen) return;
+            if (DesktopOpen && desktop != null)
+            {
+                try { desktop.DrawSearchInput(); }
+                catch (Exception ex) { ReportSystemFault("Desktop search", ex); }
+            }
             if (legacyDesktop == null || !LegacyDesktopOpen) return;
             try { legacyDesktop.Draw(); }
             catch (Exception ex)

@@ -41,7 +41,7 @@ namespace Volas
         private int featurePage, lastFeatureTotal;
         private bool featureListVisible;
         private Text featureDetail;
-        private bool availableOnly = true;
+        private bool availableOnly = false;
         private bool lastRoomAllowed;
         private bool lastMarkerRoomAllowed;
         private float nextAvailabilityCheck;
@@ -54,7 +54,12 @@ namespace Volas
         private readonly Sprite softRounded;
         private readonly DesktopIcons icons = new DesktopIcons();
         private Text ownerTelemetry, ownerFaults, communityStatus, homeStats;
-        private InputField searchBox;
+        private RectTransform searchInputRect;
+        private GUIStyle searchStyle, searchPlaceholderStyle;
+        private readonly Vector3[] searchCorners = new Vector3[4];
+        private const string SearchControl = "VolasCatalogSearch";
+        private bool searchFocused, requestSearchFocus;
+        internal bool SearchFocused { get { return visible && searchFocused; } }
         private string currentPage = "Home";
         private string currentQuery = "";
         private bool searchPending;
@@ -161,14 +166,14 @@ namespace Volas
             AddAccentGlow(sidebar.rectTransform, 4f, 2f, 83f, 37f, .36f);
             AddIcon(sidebar.rectTransform, "Volas", 12f, 12f, 25f, accentGray);
             MakeText(sidebar.rectTransform, "VOLAS", 43f, 8f, 98f, 24f, 16, white, true);
-            MakeText(sidebar.rectTransform, "v1.9.1", 44f, 29f, 90f, 15f, 10, muted);
+            MakeText(sidebar.rectTransform, "v1.9.2", 44f, 29f, 90f, 15f, 10, muted);
             var brandLine = MakeImage(sidebar.rectTransform, "Brand divider", borderColor);
             Place(brandLine.rectTransform, 10f, 50f, 128f, 1f);
 
             var header = MakeImage(window, "Header strip", headerColor);
             Place(header.rectTransform, 150f, 1f, 609f, 42f);
             header.raycastTarget = true;
-            pageTitle = MakeText(window, "home", 163f, 9f, 330f, 25f, 13, white, true);
+            pageTitle = MakeText(window, "home", 163f, 9f, 290f, 25f, 13, white, true);
             BuildSearch();
             MakeButton(window, "Close menu", "×", 730f, 7f, 23f, 27f,
                 Color.clear, () => plugin.DesktopOpen = false, muted, 17);
@@ -270,39 +275,78 @@ namespace Volas
 
         private void BuildSearch()
         {
-            Image fieldImage = MakeImage(window, "Search background",
-                new Color(.055f, .063f, .089f, 1f), softRounded, true);
-            Place(fieldImage.rectTransform, 463f, 8f, 250f, 26f);
-            AddIcon(fieldImage.rectTransform, "Search", 7f, 5f, 16f, muted);
-            fieldImage.raycastTarget = true;
-            searchBox = fieldImage.gameObject.AddComponent<InputField>();
-            searchBox.transition = Selectable.Transition.None;
-            Text fieldText = MakeText(fieldImage.rectTransform, "Input text",
-                28f, 2f, 192f, 22f, 12, white);
-            fieldText.supportRichText = false;
-            fieldText.gameObject.name = "Search input text";
-            searchBox.textComponent = fieldText;
-            Text placeholder = MakeText(fieldImage.rectTransform, "Search all features...",
-                28f, 2f, 192f, 22f, 11, muted);
-            placeholder.gameObject.name = "Search placeholder";
-            searchBox.placeholder = placeholder;
-            searchBox.characterLimit = 100;
-            searchBox.lineType = InputField.LineType.SingleLine;
-            MakeButton(fieldImage.rectTransform,"Clear search","×",224f,1f,25f,24f,Color.clear,()=>ClearSearch(),muted,15);
-            searchBox.onValueChanged.AddListener(value =>
+            var field = MakeImage(window, "Search background", new Color(.055f,.063f,.089f,1f), softRounded,true);
+            Place(field.rectTransform,463f,8f,250f,26f);
+            field.raycastTarget=true;
+            AddIcon(field.rectTransform,"Search",7f,5f,16f,muted);
+            searchInputRect=MakeRect(field.rectTransform,"Native search input");
+            Place(searchInputRect,28f,1f,193f,24f);
+            MakeButton(field.rectTransform,"Clear search","×",224f,1f,25f,24f,Color.clear,ClearSearch,muted,15);
+        }
+
+        // The license screen already uses IMGUI. Use the same native text path
+        // for search, instead of relying on a game-owned uGUI input module.
+        internal void DrawSearchInput()
+        {
+            if (!visible || waitingForBackdrop || !window.gameObject.activeInHierarchy || searchInputRect==null) return;
+            searchInputRect.GetWorldCorners(searchCorners);
+            Vector2 bottom=RectTransformUtility.WorldToScreenPoint(null,searchCorners[0]);
+            Vector2 top=RectTransformUtility.WorldToScreenPoint(null,searchCorners[2]);
+            var rect=new Rect(bottom.x,Screen.height-top.y,top.x-bottom.x,top.y-bottom.y);
+            if(rect.width<8f||rect.height<8f)return;
+            if(searchStyle==null)
             {
-                currentQuery = value ?? "";
-                selected = null;
-                featurePage = 0;
-                searchPending = true;
-                searchDue = Time.unscaledTime + .08f;
-            });
+                searchStyle=new GUIStyle(GUI.skin.textField);
+                searchStyle.normal.background=null;searchStyle.focused.background=null;
+                searchStyle.hover.background=null;searchStyle.active.background=null;
+                searchStyle.normal.textColor=white;searchStyle.focused.textColor=Color.white;
+                searchStyle.hover.textColor=white;searchStyle.active.textColor=white;
+                searchStyle.alignment=TextAnchor.MiddleLeft;
+                searchStyle.padding=new RectOffset(2,2,0,0);
+                searchStyle.richText=false;searchStyle.wordWrap=false;
+                searchPlaceholderStyle=new GUIStyle(GUI.skin.label);
+                searchPlaceholderStyle.normal.textColor=muted;
+                searchPlaceholderStyle.alignment=TextAnchor.MiddleLeft;
+                searchPlaceholderStyle.padding=new RectOffset(2,2,0,0);
+                searchPlaceholderStyle.richText=false;
+            }
+            int size=Mathf.Clamp(Mathf.RoundToInt(rect.height*.5f),11,32);
+            searchStyle.fontSize=size;searchPlaceholderStyle.fontSize=size;
+            int oldDepth=GUI.depth;
+            try
+            {
+                GUI.depth=-200;
+                var ev=Event.current;
+                if(ev.type==EventType.KeyDown&&ev.control&&ev.keyCode==KeyCode.F)
+                {requestSearchFocus=true;ev.Use();}
+                if(ev.type==EventType.MouseDown&&!rect.Contains(ev.mousePosition)&&GUI.GetNameOfFocusedControl()==SearchControl)
+                {GUI.FocusControl("");searchFocused=false;}
+                if(ev.type==EventType.KeyDown&&GUI.GetNameOfFocusedControl()==SearchControl&&
+                    (ev.keyCode==KeyCode.Return||ev.keyCode==KeyCode.KeypadEnter||ev.keyCode==KeyCode.Escape))
+                {
+                    GUI.FocusControl("");searchFocused=false;requestSearchFocus=false;
+                    searchPending=true;searchDue=0f;ev.Use();
+                }
+                GUI.SetNextControlName(SearchControl);
+                string value=GUI.TextField(rect,currentQuery,100,searchStyle);
+                if(requestSearchFocus&&Event.current.type==EventType.Repaint)
+                {GUI.FocusControl(SearchControl);requestSearchFocus=false;}
+                searchFocused=GUI.GetNameOfFocusedControl()==SearchControl;
+                if(string.IsNullOrEmpty(value)&&!searchFocused&&Event.current.type==EventType.Repaint)
+                    GUI.Label(rect,"Search all features...",searchPlaceholderStyle);
+                if(value!=currentQuery)
+                {
+                    currentQuery=value??"";selected=null;featurePage=0;
+                    searchPending=true;searchDue=Time.unscaledTime+.06f;
+                }
+            }
+            finally {GUI.depth=oldDepth;}
         }
 
         private void ClearSearch()
         {
-            currentQuery = ""; featurePage = 0; selected = null; searchPending = false;
-            if (searchBox != null) searchBox.SetTextWithoutNotify("");
+            currentQuery="";featurePage=0;selected=null;searchPending=false;
+            requestSearchFocus=true;
             RedrawPage();
         }
 
@@ -353,8 +397,8 @@ namespace Volas
             featurePage = 0;
             currentQuery = "";
             searchPending = false;
-            if (searchBox != null && searchBox.text.Length > 0)
-                searchBox.SetTextWithoutNotify("");
+            searchFocused = false;
+            requestSearchFocus = false;
             selected = null;
             BuildNavigationFresh();
             RedrawPage();
@@ -435,6 +479,7 @@ namespace Volas
                     // Only restore the cursor state we captured on opening.
                     ++openGeneration;
                     waitingForBackdrop = false;
+                    searchFocused = false; requestSearchFocus = false;
                     windowFade.blocksRaycasts = false;
                     windowFade.interactable = false;
                     polish.Play(3);
@@ -699,7 +744,7 @@ namespace Volas
 
         private string BuildOwnerReport()
         {
-            return "Volas 1.9.1\nUnity " + Application.unityVersion + "\n" +
+            return "Volas 1.9.2\nUnity " + Application.unityVersion + "\n" +
                 plugin.FramesPerSecond.ToString("0") + " FPS / " + plugin.FrameMilliseconds.ToString("0.0") + " ms\n" +
                 "Features: " + plugin.Features.All.Count + " / active: " + plugin.Features.ActiveCount + "\n" +
                 "Marker status: " + plugin.Markers.Status + "\n" + plugin.Features.CatalogStatus + "\n" +
@@ -709,7 +754,7 @@ namespace Volas
         private void UpdateOwnerPage()
         {
             if (ownerTelemetry == null || ownerFaults == null) return;
-            string runtime = "Volas 1.9.1\nUnity " + Application.unityVersion + "\n" +
+            string runtime = "Volas 1.9.2\nUnity " + Application.unityVersion + "\n" +
                 plugin.FramesPerSecond.ToString("0") + " FPS  /  " + plugin.FrameMilliseconds.ToString("0.0") + " ms\n" +
                 plugin.Features.All.Count + " registered features\n" + plugin.Features.ActiveCount + " active features\n" +
                 plugin.Markers.Status + "\n" + plugin.Licensing.LicenseStats;

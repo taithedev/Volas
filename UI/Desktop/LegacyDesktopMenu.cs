@@ -14,7 +14,7 @@ namespace Volas
         private CursorLockMode savedLock;
         private string search = "";
         private Vector2 scroll;
-        private bool availableOnly = true;
+        private bool availableOnly = false;
         private System.Collections.Generic.List<Feature> results;
         private string lastSearch;
         private int lastRevision = -1;

@@ -72,3 +72,7 @@ Desktop feature browsing is paged at 16 rows, including search and favorites. It
 ## 1.9.1 search and availability
 
 Modern and legacy menus share a ranked, multi-keyword catalog search. Search spans feature names, IDs, categories, descriptions and common aliases, with direct navigation to a matching page. The default Available Now filter hides unavailable room-dependent features while retaining local cosmetics and telemetry. All Features exposes the full catalog without changing any activation permissions. The VR Local tab includes all unrestricted features. The old unused desktop scroll fields have been removed. Existing game-room and license restrictions remain intact.
+
+## 1.9.2 native search input
+
+The modern search bar uses an IMGUI text field over the existing desktop header, independent of the game's uGUI input module. Click the bar or use Ctrl+F to focus it; Enter/Escape leaves the field, and the clear button resets the query. The field supports native keyboard editing and clipboard shortcuts. End does not reset features while modern search is focused. Both desktop catalogs now show all entries by default; the available-only filter remains optional. Lobby-specific activation restrictions are unchanged. Test typing, paste, page selection and clearing in the installed game.
