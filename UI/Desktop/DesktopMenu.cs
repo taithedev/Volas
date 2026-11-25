@@ -24,6 +24,14 @@ namespace Volas
         private readonly RectTransform navigationContent;
         private readonly Text statusText;
         private readonly Text pageTitle;
+        private readonly VolasDesktopEffects polish;
+        private readonly CanvasGroup windowFade;
+        private readonly CanvasGroup pageFade;
+        private float fade = 0f;
+        private float pageTransition = 1f;
+        private int openGeneration;
+        private bool waitingForBackdrop;
+        private readonly List<Image> accentGlows = new List<Image>();
         private ScrollRect featureScroll;
         private string scrollKey = "";
         private readonly Text hudText;
@@ -44,8 +52,8 @@ namespace Volas
         private float lastStatusUpdate;
         private float lastHUDUpdate;
         private readonly Color ink = new Color(.022f, .026f, .050f, .99f);
-        private readonly Color headerColor = new Color(.025f, .030f, .050f, 1f);
-        private readonly Color panelColor = new Color(.039f, .044f, .068f, 1f);
+        private readonly Color headerColor = new Color(.025f, .030f, .050f, .85f);
+        private readonly Color panelColor = new Color(.039f, .044f, .068f, .88f);
         private readonly Color hoverColor = new Color(.065f, .080f, .147f, 1f);
         private readonly Color borderColor = new Color(.14f, .15f, .22f, .35f);
         private readonly Color accentGray = new Color(.37f, .41f, .83f, 1f);
@@ -93,6 +101,11 @@ namespace Volas
             shade.transform.SetParent(window, false);
             Place(shade.rectTransform, 6f, 8f, 760f, 500f);
             shade.transform.SetAsFirstSibling();
+            windowFade = window.gameObject.AddComponent<CanvasGroup>();
+            windowFade.alpha = 0f;
+            windowFade.blocksRaycasts = false;
+            windowFade.interactable = false;
+            polish = new VolasDesktopEffects(plugin, window, rounded);
 
             windowBackground = MakeImage(window, "OLED graphite",
                 new Color(ink.r, ink.g, ink.b, plugin.Settings.DesktopOpacity.Value),
@@ -105,10 +118,12 @@ namespace Volas
             StretchInset(innerBackground.rectTransform, 1f);
             innerBackground.color = new Color(ink.r, ink.g, ink.b,
                 plugin.Settings.DesktopOpacity.Value);
-            var sidebar = MakeImage(window, "Sidebar", new Color(.028f, .029f, .050f, 1f));
+            polish.BuildBackdrop();
+            var sidebar = MakeImage(window, "Sidebar", new Color(.028f, .029f, .050f, .83f));
             Place(sidebar.rectTransform, 1f, 1f, 149f, 498f);
             var sidebarLine = MakeImage(window, "Sidebar divider", borderColor);
             Place(sidebarLine.rectTransform, 149f, 1f, 1f, 498f);
+            AddAccentGlow(sidebar.rectTransform, 4f, 2f, 83f, 37f, .36f);
             MakeText(sidebar.rectTransform, "volas", 13f, 9f, 120f, 22f, 16, accentGray, true);
             MakeText(sidebar.rectTransform, "v1.4.0", 14f, 30f, 120f, 14f, 10, muted);
             var brandLine = MakeImage(sidebar.rectTransform, "Brand divider", borderColor);
@@ -150,6 +165,7 @@ namespace Volas
             pageRoot = MakeRect(window, "Page content");
             Place(pageRoot, 160f, 50f, 730f, 512f);
             pageRoot.localScale = new Vector3(.81f, .81f, 1f);
+            pageFade = pageRoot.gameObject.AddComponent<CanvasGroup>();
             statusText = MakeText(window, "", 163f, 470f, 558f, 22f, 10, muted);
             MakeButton(window, "Resize grip", "⌟", 735f, 475f, 20f, 22f,
                 Color.clear, () => { }, muted, 13);
@@ -248,6 +264,7 @@ namespace Volas
                 var btn = MakeButton(navigationContent, "Tab " + tab, label,
                     0f, y, 133f, 23f, active ? hoverColor : panelColor,
                     () => Navigate(chosen), active ? white : muted, 11, active);
+                if (active) AddAccentGlow(btn.transform as RectTransform, 2f, 1f, 129f, 21f, .28f, true);
                 Text t = btn.GetComponentInChildren<Text>();
                 if (t != null)
                 {
@@ -261,6 +278,7 @@ namespace Volas
 
         private void Navigate(string name)
         {
+            if (currentPage != name) pageTransition = plugin.Settings.DesktopMotion.Value ? .18f : 1f;
             currentPage = name;
             currentQuery = "";
             if (searchBox != null && searchBox.text.Length > 0)
@@ -295,24 +313,43 @@ namespace Volas
                 visible = open;
                 if (open)
                 {
+                    int generation = ++openGeneration;
+                    waitingForBackdrop = plugin.Settings.DesktopGlass.Value && !window.gameObject.activeSelf;
                     savedCursorVisible = Cursor.visible;
                     savedLockMode = Cursor.lockState;
                     Cursor.lockState = CursorLockMode.None;
                     Cursor.visible = true;
                     if (addedInputModule != null) addedInputModule.enabled = true;
                     root.SetActive(true);
-                    window.gameObject.SetActive(true);
+                    windowFade.blocksRaycasts = true;
+                    windowFade.interactable = true;
                     RedrawPage();
+                    polish.Play(2);
+                    if (waitingForBackdrop)
+                    {
+                        plugin.StartCoroutine(polish.CaptureBackdrop(() => generation == openGeneration && visible, () =>
+                        {
+                            if (generation != openGeneration || !visible) return;
+                            waitingForBackdrop = false;
+                            window.gameObject.SetActive(true);
+                        }));
+                    }
+                    else window.gameObject.SetActive(true);
                 }
                 else
                 {
                     // Only restore the cursor state we captured on opening.
-                    window.gameObject.SetActive(false);
+                    ++openGeneration;
+                    waitingForBackdrop = false;
+                    windowFade.blocksRaycasts = false;
+                    windowFade.interactable = false;
+                    polish.Play(3);
                     if (addedInputModule != null) addedInputModule.enabled = false;
                     Cursor.lockState = savedLockMode;
                     Cursor.visible = savedCursorVisible;
                 }
             }
+            UpdatePolish(open);
             if (open && plugin.Features.Revision != drawnRevision)
                 RedrawPage();
             if (open)
@@ -337,6 +374,46 @@ namespace Volas
             }
         }
 
+        private void UpdatePolish(bool open)
+        {
+            float target = open && !waitingForBackdrop ? 1f : 0f;
+            float speed = target > fade ? 7f : 10f;
+            fade = plugin.Settings.DesktopMotion.Value
+                ? Mathf.MoveTowards(fade, target, Time.unscaledDeltaTime * speed) : target;
+            windowFade.alpha = fade * fade * (3f - 2f * fade);
+            if (!open && fade <= 0f && window.gameObject.activeSelf)
+            {
+                window.gameObject.SetActive(false);
+                polish.ClearBackdrop();
+            }
+            if (open && !waitingForBackdrop)
+            {
+                polish.UpdateBackdrop();
+                pageTransition = plugin.Settings.DesktopMotion.Value
+                    ? Mathf.MoveTowards(pageTransition, 1f, Time.unscaledDeltaTime * 6f) : 1f;
+                pageFade.alpha = pageTransition * pageTransition * (3f - 2f * pageTransition);
+            }
+            float amount = plugin.Settings.DesktopBloom.Value ? plugin.Settings.DesktopBloomStrength.Value : 0f;
+            for (int i = accentGlows.Count - 1; i >= 0; i--)
+            {
+                var glow = accentGlows[i];
+                if (glow == null) { accentGlows.RemoveAt(i); continue; }
+                var tint = glow.color;
+                tint.a = amount * (glow.gameObject.name == "Volas logo glow" ? .45f : .55f);
+                glow.color = tint;
+            }
+        }
+
+        private void AddAccentGlow(RectTransform parent, float x, float y, float w, float h, float alpha, bool behind = false)
+        {
+            var image = MakeImage(parent, alpha == .36f ? "Volas logo glow" : "Accent bloom",
+                new Color(.32f, .39f, 1f, plugin.Settings.DesktopBloom.Value ? alpha * plugin.Settings.DesktopBloomStrength.Value : 0f),
+                polish.GlowSprite, false);
+            Place(image.rectTransform, x, y, w, h);
+            if (behind) image.transform.SetAsFirstSibling();
+            accentGlows.Add(image);
+        }
+
         private void UpdateHUD()
         {
             string value = plugin.Effects.LocalTelemetry();
@@ -345,7 +422,7 @@ namespace Volas
             if (hasText && hudText.text != value) hudText.text = value;
             crosshairH.gameObject.SetActive(plugin.Effects.DesktopCrosshair);
             crosshairV.gameObject.SetActive(plugin.Effects.DesktopCrosshair);
-            if (!visible) root.SetActive(hasText || plugin.Effects.DesktopCrosshair);
+            if (!visible) root.SetActive(window.gameObject.activeSelf || polish.AudioPlaying || hasText || plugin.Effects.DesktopCrosshair);
         }
 
         private void RedrawPage()
@@ -354,13 +431,15 @@ namespace Volas
             drawnRevision = plugin.Features.Revision;
             drawnPage = currentPage;
             pageTitle.text = string.IsNullOrWhiteSpace(currentQuery) ? currentPage.ToLowerInvariant() : "search results";
-            if (string.IsNullOrEmpty(currentQuery) && (currentPage == "Home" || currentPage == "Settings" || currentPage == "Wrist Layout" || currentPage == "Player ESP" || currentPage == "Gun Studio"))
+            if (string.IsNullOrEmpty(currentQuery) && (currentPage == "Home" || currentPage == "Settings" || currentPage == "Wrist Layout" || currentPage == "Player ESP" || currentPage == "Gun Studio" || currentPage == "UI Effects"))
                 featureScroll = null;
             DestroyChildren(pageRoot);
             if (string.IsNullOrEmpty(currentQuery) && currentPage == "Home")
                 DrawHome();
             else if (string.IsNullOrEmpty(currentQuery) && currentPage == "Settings")
                 DrawSettingsPage();
+            else if (string.IsNullOrEmpty(currentQuery) && currentPage == "UI Effects")
+                DrawEffectsPage();
             else if (string.IsNullOrEmpty(currentQuery) && currentPage == "Wrist Layout")
                 DrawWristLayout();
             else if (string.IsNullOrEmpty(currentQuery) && currentPage == "Player ESP")
@@ -391,6 +470,7 @@ namespace Volas
                     highlight.raycastTarget = true;
                     Place(highlight.rectTransform, x, y, 237f, 38f);
                     Button button = highlight.gameObject.AddComponent<Button>();
+                    button.targetGraphic = highlight;
                     button.transition = Selectable.Transition.ColorTint;
                     ColorBlock colors = button.colors;
                     colors.normalColor = Color.white;
@@ -401,7 +481,7 @@ namespace Volas
                         label == "Help And Safety" ? "Safety" :
                         label == "Zone Locked" ? "Zones" :
                         label;
-                    button.onClick.AddListener(() => Navigate(destination));
+                    polish.Wire(button, () => Navigate(destination));
                     MakeText(highlight.rectTransform, label, 7f, 8f, 223f, 22f,
                         12, new Color(0.553f, 0.553f, 0.553f, 1f), true);
                     var line = MakeImage(pageRoot, "Row divider", borderColor);
@@ -455,6 +535,7 @@ namespace Volas
                 14f, 119f, 207f, 33f, panelColor,
                 () => { plugin.DesktopOpen = false; plugin.LegacyDesktopOpen = true; }, white, 10);
             MakeButton(appearance, "Wrist layout", "WRIST MENU SETTINGS", 14f, 255f, 207f, 37f, panelColor, () => Navigate("Wrist Layout"), white, 10, true);
+            MakeButton(appearance, "UI Effects", "UI EFFECTS / AUDIO", 14f, 297f, 207f, 31f, accentGray, () => Navigate("UI Effects"), white, 10, true);
             MakeButton(controls, "Compact VR",
                 plugin.Compact ? "COMPACT VR ON" : "COMPACT VR OFF",
                 14f, 184f, 207f, 33f, panelColor,
@@ -479,6 +560,41 @@ namespace Volas
             MakeButton(safety, "Disable all", "PANIC / DISABLE ALL",
                 14f, 197f, 206f, 40f, new Color(0.283f, 0.283f, 0.283f, .9f),
                 () => { plugin.Features.DisableAll(); RedrawPage(); }, white, 11, true);
+        }
+
+        private void DrawEffectsPage()
+        {
+            var s = plugin.Settings;
+            MakeText(pageRoot, "Desktop effects", 4f, 0f, 600f, 28f, 16, white, true);
+            MakeText(pageRoot, "Local appearance only — no changes to gameplay or global post-processing.", 4f, 30f, 700f, 25f, 11, muted);
+            var left = MakeImage(pageRoot, "Glass settings", panelColor, softRounded, true);
+            Place(left.rectTransform, 0f, 65f, 354f, 350f);
+            var right = MakeImage(pageRoot, "Sound and motion", panelColor, softRounded, true);
+            Place(right.rectTransform, 368f, 65f, 354f, 350f);
+            var a = left.rectTransform;
+            var b = right.rectTransform;
+            MakeText(a, "ACRYLIC & BLOOM", 16f, 12f, 320f, 26f, 12, white, true);
+            MakeButton(a, "Acrylic", "ACRYLIC BLUR: " + (s.DesktopGlass.Value ? "ON" : "OFF"), 16f, 52f, 322f, 39f, hoverColor, () => { s.DesktopGlass.Value = !s.DesktopGlass.Value; RedrawPage(); }, white, 12);
+            MakeText(a, "Glass blend", 16f, 108f, 310f, 20f, 11, muted);
+            MakeSlider(a, "Glass blend", 16f, 133f, 315f, 0f, 1f, s.DesktopBlurStrength.Value, v => s.DesktopBlurStrength.Value = v);
+            MakeButton(a, "Bloom", "BLOOM: " + (s.DesktopBloom.Value ? "ON" : "OFF"), 16f, 177f, 322f, 39f, hoverColor, () => { s.DesktopBloom.Value = !s.DesktopBloom.Value; RedrawPage(); }, white, 12);
+            MakeText(a, "Bloom intensity", 16f, 231f, 310f, 20f, 11, muted);
+            MakeSlider(a, "Bloom intensity", 16f, 256f, 315f, 0f, 1f, s.DesktopBloomStrength.Value, v => s.DesktopBloomStrength.Value = v);
+            MakeText(a, "Reopen F6 to refresh the scene behind the glass.", 16f, 292f, 320f, 31f, 10, muted);
+            MakeText(b, "MOTION & AUDIO", 16f, 12f, 320f, 26f, 12, white, true);
+            MakeButton(b, "Motion", "ANIMATIONS: " + (s.DesktopMotion.Value ? "ON" : "OFF"), 16f, 52f, 322f, 39f, hoverColor, () => { s.DesktopMotion.Value = !s.DesktopMotion.Value; RedrawPage(); }, white, 12);
+            MakeButton(b, "Audio", "UI SOUNDS: " + (s.DesktopSounds.Value ? "ON" : "OFF"), 16f, 106f, 322f, 39f, hoverColor, () => { s.DesktopSounds.Value = !s.DesktopSounds.Value; RedrawPage(); }, white, 12);
+            MakeText(b, "Sound volume", 16f, 160f, 310f, 20f, 11, muted);
+            MakeSlider(b, "Sound volume", 16f, 185f, 315f, 0f, 1f, s.DesktopSoundVolume.Value, v => s.DesktopSoundVolume.Value = v);
+            MakeButton(b, "Test audio", "TEST SOUND", 16f, 228f, 322f, 39f, panelColor, () => polish.Play(2), white, 11);
+            MakeButton(b, "Reset effects", "RESET EFFECTS", 16f, 280f, 322f, 39f, panelColor, () =>
+            {
+                s.DesktopGlass.Value = true; s.DesktopBlurStrength.Value = .72f;
+                s.DesktopBloom.Value = true; s.DesktopBloomStrength.Value = .55f;
+                s.DesktopMotion.Value = true; s.DesktopSounds.Value = true; s.DesktopSoundVolume.Value = .25f;
+                RedrawPage();
+            }, white, 11);
+            MakeButton(pageRoot, "Back", "BACK TO SETTINGS", 0f, 435f, 220f, 37f, panelColor, () => Navigate("Settings"), white, 11);
         }
 
         private void DrawWristLayout()
@@ -659,6 +775,7 @@ namespace Volas
                         mod.Enabled ? accentGray : new Color(.085f, .093f, .145f, 1f),
                         rounded, false);
                     Place(track.rectTransform, 307f, 9f, 40f, 18f);
+                    if (mod.Enabled) AddAccentGlow(rt, 299f, 2f, 56f, 32f, .48f);
                     var knob = MakeImage(rt, "Switch knob",
                         mod.Enabled ? white : new Color(.39f, .41f, .51f, 1f),
                         rounded, false);
@@ -775,6 +892,9 @@ namespace Volas
                 Cursor.lockState = savedLockMode;
                 Cursor.visible = savedCursorVisible;
             }
+            ++openGeneration;
+            visible = false;
+            polish.Dispose();
             if (root != null) UnityEngine.Object.Destroy(root);
             if (createdEventSystem != null)
                 UnityEngine.Object.Destroy(createdEventSystem);
@@ -897,14 +1017,15 @@ namespace Volas
             Place(image.rectTransform, x, y, w, h);
             image.raycastTarget = true;
             Button button = image.gameObject.AddComponent<Button>();
+            button.targetGraphic = image;
             button.transition = Selectable.Transition.ColorTint;
             ColorBlock tint = button.colors;
             tint.normalColor = Color.white;
-            tint.highlightedColor = new Color(.88f, .88f, .88f, 1f);
+            tint.highlightedColor = new Color(.84f, .90f, 1f, 1f);
             tint.pressedColor = new Color(.70f, .70f, .70f, 1f);
-            tint.fadeDuration = .10f;
+            tint.fadeDuration = plugin.Settings.DesktopMotion.Value ? .16f : 0f;
             button.colors = tint;
-            if (callback != null) button.onClick.AddListener(() => callback());
+            polish.Wire(button, callback);
             if (!string.IsNullOrEmpty(title))
             {
                 var t = MakeText(image.rectTransform, title, 0f, 0f,

@@ -22,6 +22,13 @@ namespace Volas
         internal readonly ConfigEntry<bool> VrPointerRay;
         internal readonly ConfigEntry<bool> VrNotifications;
         internal readonly ConfigEntry<float> DesktopOpacity;
+        internal readonly ConfigEntry<bool> DesktopGlass;
+        internal readonly ConfigEntry<float> DesktopBlurStrength;
+        internal readonly ConfigEntry<bool> DesktopBloom;
+        internal readonly ConfigEntry<float> DesktopBloomStrength;
+        internal readonly ConfigEntry<bool> DesktopMotion;
+        internal readonly ConfigEntry<bool> DesktopSounds;
+        internal readonly ConfigEntry<float> DesktopSoundVolume;
         internal readonly ConfigEntry<float> MarkerRange;
         internal readonly ConfigEntry<float> MarkerRefresh;
         internal readonly ConfigEntry<int> MarkerLimit;
@@ -77,6 +84,13 @@ namespace Volas
             DesktopOpacity = config.Bind("Appearance", "Desktop opacity", 0.91f,
                 new ConfigDescription("Black glass background opacity.",
                     new AcceptableValueRange<float>(0.72f, 1f)));
+            DesktopGlass = config.Bind("Desktop Effects", "Acrylic blur", true, "Blur a local scene snapshot when the desktop menu opens.");
+            DesktopBlurStrength = config.Bind("Desktop Effects", "Blur intensity", .72f, new ConfigDescription("Acrylic backdrop blend.", new AcceptableValueRange<float>(0f, 1f)));
+            DesktopBloom = config.Bind("Desktop Effects", "Bloom", true, "Local soft accent glows, without changing game post-processing.");
+            DesktopBloomStrength = config.Bind("Desktop Effects", "Bloom intensity", .55f, new ConfigDescription("Glow opacity.", new AcceptableValueRange<float>(0f, 1f)));
+            DesktopMotion = config.Bind("Desktop Effects", "Animations", true, "Fade transitions and button feedback.");
+            DesktopSounds = config.Bind("Desktop Effects", "UI sounds", true, "Local procedural menu sounds.");
+            DesktopSoundVolume = config.Bind("Desktop Effects", "Sound volume", .25f, new ConfigDescription("UI audio volume.", new AcceptableValueRange<float>(0f, 1f)));
             MarkerRange = config.Bind("Player ESP", "Range", 25f, new ConfigDescription("Maximum marker distance in meters.", new AcceptableValueRange<float>(5f, 60f)));
             MarkerRefresh = config.Bind("Player ESP", "Refresh seconds", .20f, new ConfigDescription("Distance label and range refresh interval.", new AcceptableValueRange<float>(.10f, .75f)));
             MarkerLimit = config.Bind("Player ESP", "Marker limit", 8, new ConfigDescription("Maximum remote markers.", new AcceptableValueRange<int>(1, 12)));

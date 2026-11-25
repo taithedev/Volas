@@ -40,3 +40,7 @@ The GUI source is part of the same `Volas.dll` as every other mod. `Volas.csproj
 ## Features and limitations
 
 The project currently registers **72** feature entries: 55 original entries plus 17 local movement, visual, fun and safety entries. GunLib uses the selected controller **grip to aim and trigger to fire**. Solo/MODDED room checks are applied to local locomotion changes. Lobby-wide effects and moderation evasions are intentionally absent. Local build against UnityEngine.UI.dll and UnityEngine.UIModule.dll, plus in-game verification, are required before calling this a working binary.
+
+## Desktop effects
+
+F6 retains the existing sidebar and compact two-column layout. Settings → UI Effects / Audio controls acrylic, bloom, motion and sound separately. Acrylic captures a local in-memory desktop scene snapshot before the window opens, downsamples it on the GPU, and crops it to the window. The snapshot is refreshed on reopening and discarded on closing. When capture is unsupported, the menu uses the frosted grain background instead. Bloom is a procedural UI-only soft glow, not HDR scene bloom. Hover/click/open/close tones are synthesized locally; no sound files, global audio changes or Photon voice changes. All controls are saved in the existing BepInEx configuration.
