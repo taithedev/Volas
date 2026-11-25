@@ -23,6 +23,9 @@ namespace Volas
         private readonly RectTransform pageRoot;
         private readonly RectTransform navigationContent;
         private readonly Text statusText;
+        private readonly Text pageTitle;
+        private ScrollRect featureScroll;
+        private string scrollKey = "";
         private readonly Text hudText;
         private readonly Image crosshairH;
         private readonly Image crosshairV;
@@ -40,20 +43,21 @@ namespace Volas
         private CursorLockMode savedLockMode;
         private float lastStatusUpdate;
         private float lastHUDUpdate;
-        private readonly Color ink = new Color(0.026f, 0.026f, 0.026f, .96f);
-        private readonly Color headerColor = new Color(0.039f, 0.039f, 0.039f, .49f);
-        private readonly Color panelColor = new Color(0.052f, 0.052f, 0.052f, .60f);
-        private readonly Color hoverColor = new Color(0.116f, 0.116f, 0.116f, .45f);
-        private readonly Color borderColor = new Color(0.537f, 0.537f, 0.537f, .105f);
-        private readonly Color accentGray = new Color(0.536f, 0.536f, 0.536f, 1f);
-        private readonly Color white = new Color(0.897f, 0.897f, 0.897f, 1f);
-        private readonly Color muted = new Color(0.463f, 0.463f, 0.463f, 1f);
+        private readonly Color ink = new Color(.022f, .026f, .050f, .99f);
+        private readonly Color headerColor = new Color(.025f, .030f, .050f, 1f);
+        private readonly Color panelColor = new Color(.039f, .044f, .068f, 1f);
+        private readonly Color hoverColor = new Color(.065f, .080f, .147f, 1f);
+        private readonly Color borderColor = new Color(.14f, .15f, .22f, .35f);
+        private readonly Color accentGray = new Color(.37f, .41f, .83f, 1f);
+        private readonly Color white = new Color(.86f, .87f, .90f, 1f);
+        private readonly Color muted = new Color(.49f, .51f, .59f, 1f);
 
         private static readonly string[] Tabs =
         {
-            "Settings", "Home", "Local", "Players", "VR Rig", "Movement", "Visuals",
-            "Overpowered", "Master", "Global", "Gamemode", "Fun", "Plugin",
-            "Zones", "Safety", "Projectiles", "Favorites", "Enabled", "All"
+            "Home", "Players", "#MODS", "Movement", "Visuals", "Gamemode",
+            "Fun", "Projectiles", "Custom Categories", "Zones", "#POWER",
+            "VR Rig", "Overpowered", "Master", "Global", "#LIBRARY",
+            "Local", "Favorites", "Enabled", "All", "Plugin", "Safety"
         };
 
         internal DesktopMenu(VolasPlugin owner)
@@ -61,7 +65,7 @@ namespace Volas
             plugin = owner;
             font = ResolveFont();
             rounded = MakeRoundSprite(48, 13);
-            softRounded = MakeRoundSprite(48, 8);
+            softRounded = MakeRoundSprite(32, 5);
 
             root = new GameObject("Volas Unity UI", typeof(RectTransform),
                 typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
@@ -99,63 +103,68 @@ namespace Volas
             innerBackground = MakeImage(window, "Inner panel", new Color(ink.r, ink.g, ink.b, .98f),
                 rounded, true);
             StretchInset(innerBackground.rectTransform, 1f);
-            innerBackground.color = new Color(0.034f, 0.034f, 0.034f,
-                plugin.Settings.DesktopOpacity.Value * .85f);
-            var header = MakeImage(window, "Header strip", headerColor, softRounded, true);
+            innerBackground.color = new Color(ink.r, ink.g, ink.b,
+                plugin.Settings.DesktopOpacity.Value);
+            var sidebar = MakeImage(window, "Sidebar", new Color(.028f, .029f, .050f, 1f));
+            Place(sidebar.rectTransform, 1f, 1f, 149f, 498f);
+            var sidebarLine = MakeImage(window, "Sidebar divider", borderColor);
+            Place(sidebarLine.rectTransform, 149f, 1f, 1f, 498f);
+            MakeText(sidebar.rectTransform, "volas", 13f, 9f, 120f, 22f, 16, accentGray, true);
+            MakeText(sidebar.rectTransform, "v1.4.0", 14f, 30f, 120f, 14f, 10, muted);
+            var brandLine = MakeImage(sidebar.rectTransform, "Brand divider", borderColor);
+            Place(brandLine.rectTransform, 10f, 50f, 128f, 1f);
+
+            var header = MakeImage(window, "Header strip", headerColor);
+            Place(header.rectTransform, 150f, 1f, 609f, 42f);
             header.raycastTarget = true;
-            Place(header.rectTransform, 4f, 3f, 752f, 38f);
-
-            MakeText(window, "volas", 14f, 8f, 62f, 20f, 15, accentGray, true);
-            MakeText(window, "v1.4.0", 79f, 11f, 72f, 18f, 10, muted);
-            MakeText(window, "⌕", 531f, 9f, 17f, 22f, 15, accentGray);
+            pageTitle = MakeText(window, "home", 163f, 9f, 330f, 25f, 13, white, true);
             BuildSearch();
-            MakeText(window, "⚙", 706f, 9f, 18f, 22f, 17, muted);
-            MakeButton(window, "Settings hitbox", "", 697f, 6f, 30f, 28f,
-                Color.clear, () => Navigate("Settings"));
-            MakeText(window, "×", 734f, 9f, 18f, 20f, 17, muted);
-            MakeButton(window, "Close menu", "", 728f, 4f, 25f, 28f,
-                Color.clear, () => plugin.DesktopOpen = false);
+            MakeButton(window, "Close menu", "×", 730f, 7f, 23f, 27f,
+                Color.clear, () => plugin.DesktopOpen = false, muted, 17);
+            var topLine = MakeImage(window, "Header divider", borderColor);
+            Place(topLine.rectTransform, 159f, 42f, 591f, 1f);
 
-            MakeImage(window, "Separator 1", borderColor, null, true).rectTransform
-                .SetAsLastSibling();
-            var sep1 = window.Find("Separator 1") as RectTransform;
-            Place(sep1, 8f, 39f, 744f, 1f);
-
-            RectTransform navViewport = MakeRect(window, "Navigation viewport");
-            Place(navViewport, 13f, 43f, 735f, 32f);
-            navViewport.gameObject.AddComponent<Image>().color = new Color(0.000f, 0.000f, 0.000f, .001f);
-            var navMask = navViewport.gameObject.AddComponent<RectMask2D>();
+            RectTransform navViewport = MakeRect(sidebar.rectTransform, "Navigation viewport");
+            Place(navViewport, 8f, 54f, 133f, 402f);
+            navViewport.gameObject.AddComponent<Image>().color = new Color(0f, 0f, 0f, .001f);
+            navViewport.gameObject.AddComponent<RectMask2D>();
             var scroll = navViewport.gameObject.AddComponent<ScrollRect>();
-            scroll.horizontal = true;
-            scroll.vertical = false;
-            scroll.scrollSensitivity = 30f;
+            scroll.horizontal = false;
+            scroll.vertical = true;
+            scroll.scrollSensitivity = 24f;
             scroll.movementType = ScrollRect.MovementType.Clamped;
             navigationContent = MakeRect(navViewport, "Navigation buttons");
-            AnchorTopLeft(navigationContent);
             scroll.viewport = navViewport;
             scroll.content = navigationContent;
             BuildNavigation();
 
-            var separator = MakeImage(window, "Separator 2", borderColor, null, true);
-            Place(separator.rectTransform, 8f, 76f, 744f, 1f);
+            var bottomLine = MakeImage(sidebar.rectTransform, "Footer divider", borderColor);
+            Place(bottomLine.rectTransform, 10f, 461f, 128f, 1f);
+            MakeButton(sidebar.rectTransform, "Settings", "⚙", 10f, 469f, 25f, 24f,
+                panelColor, () => Navigate("Settings"), muted, 17);
+            MakeButton(sidebar.rectTransform, "Favorites", "★", 39f, 469f, 25f, 24f,
+                panelColor, () => Navigate("Favorites"), muted, 14);
+            MakeButton(sidebar.rectTransform, "VR menu", "VR", 104f, 469f, 35f, 24f,
+                hoverColor, () => { plugin.VrOpen = true; plugin.DesktopOpen = false; }, white, 10, true);
 
             pageRoot = MakeRect(window, "Page content");
-            Place(pageRoot, 15f, 86f, 730f, 387f);
-            statusText = MakeText(window, "", 17f, 473f, 704f, 19f, 9, muted);
-            MakeButton(window, "Resize grip", "⌟", 736f, 474f, 19f, 23f,
-                Color.clear, () => { });
+            Place(pageRoot, 160f, 50f, 730f, 512f);
+            pageRoot.localScale = new Vector3(.81f, .81f, 1f);
+            statusText = MakeText(window, "", 163f, 470f, 558f, 22f, 10, muted);
+            MakeButton(window, "Resize grip", "⌟", 735f, 475f, 20f, 22f,
+                Color.clear, () => { }, muted, 13);
             var drag = header.gameObject.AddComponent<VolasUIDrag>();
             drag.Target = window;
             drag.IsResize = false;
             drag.OnComplete = SavePosition;
-            // Text and controls sit above the header. The uncovered header still drags.
             var resizeHitbox = MakeImage(window, "Resize handler", Color.clear);
             resizeHitbox.raycastTarget = true;
-            Place(resizeHitbox.rectTransform, 728f, 468f, 32f, 32f);
+            Place(resizeHitbox.rectTransform, 731f, 472f, 29f, 28f);
             var resize = resizeHitbox.gameObject.AddComponent<VolasUIDrag>();
             resize.Target = window;
             resize.IsResize = true;
             resize.OnComplete = SavePosition;
+
 
             hudText = MakeText(canvasRect, "", 10f, 8f, 340f, 190f, 12, white);
             hudText.gameObject.SetActive(false);
@@ -200,18 +209,19 @@ namespace Volas
         private void BuildSearch()
         {
             Image fieldImage = MakeImage(window, "Search background",
-                new Color(0.082f, 0.082f, 0.082f, .73f), softRounded, true);
-            Place(fieldImage.rectTransform, 545f, 7f, 140f, 24f);
+                new Color(.055f, .063f, .089f, 1f), softRounded, true);
+            Place(fieldImage.rectTransform, 515f, 8f, 198f, 26f);
+            MakeText(fieldImage.rectTransform, "⌕", 8f, 0f, 19f, 26f, 15, muted);
             fieldImage.raycastTarget = true;
             searchBox = fieldImage.gameObject.AddComponent<InputField>();
             searchBox.transition = Selectable.Transition.None;
             Text fieldText = MakeText(fieldImage.rectTransform, "Input text",
-                9f, 3f, 121f, 20f, 11, white);
+                28f, 2f, 162f, 22f, 11, white);
             fieldText.supportRichText = false;
             fieldText.gameObject.name = "Search input text";
             searchBox.textComponent = fieldText;
             Text placeholder = MakeText(fieldImage.rectTransform, "search...",
-                9f, 3f, 120f, 20f, 11, muted);
+                28f, 2f, 162f, 22f, 11, muted);
             placeholder.gameObject.name = "Search placeholder";
             searchBox.placeholder = placeholder;
             searchBox.onValueChanged.AddListener(value =>
@@ -223,27 +233,30 @@ namespace Volas
 
         private void BuildNavigation()
         {
-            float x = 0f;
+            float y = 0f;
             foreach (string tab in Tabs)
             {
-                string chosen = tab;
-                float width = Mathf.Max(29f, tab.Length * 5.6f + 9f);
-                bool active = tab == currentPage;
-                var btn = MakeButton(navigationContent, "Tab " + tab,
-                    tab.ToLowerInvariant(), x, 2f, width, 29f,
-                    Color.clear, () => Navigate(chosen), active ? white : muted,
-                    active ? 10 : 9, active);
-                Text label = btn.GetComponentInChildren<Text>();
-                if (label != null) label.alignment = TextAnchor.MiddleCenter;
-                if (active)
+                if (tab.StartsWith("#", StringComparison.Ordinal))
                 {
-                    var under = MakeImage(btn.transform as RectTransform,
-                        "Active underline", accentGray);
-                    Place(under.rectTransform, 5f, 27f, width - 10f, 2f);
+                    MakeText(navigationContent, tab.Substring(1), 6f, y + 3f, 120f, 17f, 9, muted, true);
+                    y += 20f;
+                    continue;
                 }
-                x += width + 1f;
+                string chosen = tab;
+                string label = tab == "Custom Categories" ? "custom" : tab.ToLowerInvariant();
+                bool active = tab == currentPage;
+                var btn = MakeButton(navigationContent, "Tab " + tab, label,
+                    0f, y, 133f, 23f, active ? hoverColor : panelColor,
+                    () => Navigate(chosen), active ? white : muted, 11, active);
+                Text t = btn.GetComponentInChildren<Text>();
+                if (t != null)
+                {
+                    t.alignment = TextAnchor.MiddleLeft;
+                    Place(t.rectTransform, 9f, 0f, 120f, 23f);
+                }
+                y += 26f;
             }
-            navigationContent.sizeDelta = new Vector2(x, 32f);
+            navigationContent.sizeDelta = new Vector2(133f, Mathf.Max(402f, y));
         }
 
         private void Navigate(string name)
@@ -259,8 +272,11 @@ namespace Volas
 
         private void BuildNavigationFresh()
         {
+            var scroll = navigationContent.parent.GetComponent<ScrollRect>();
+            float position = scroll != null ? scroll.verticalNormalizedPosition : 1f;
             DestroyChildren(navigationContent);
             BuildNavigation();
+            if (scroll != null) scroll.verticalNormalizedPosition = position;
         }
 
         internal void Tick()
@@ -271,7 +287,7 @@ namespace Volas
             {
                 lastOpacity = alpha;
                 windowBackground.color = new Color(ink.r, ink.g, ink.b, alpha);
-                innerBackground.color = new Color(0.034f, 0.034f, 0.034f, alpha * .85f);
+                innerBackground.color = new Color(ink.r, ink.g, ink.b, alpha);
             }
             bool open = plugin.DesktopOpen;
             if (open != visible)
@@ -337,6 +353,9 @@ namespace Volas
             if (pageRoot == null) return;
             drawnRevision = plugin.Features.Revision;
             drawnPage = currentPage;
+            pageTitle.text = string.IsNullOrWhiteSpace(currentQuery) ? currentPage.ToLowerInvariant() : "search results";
+            if (string.IsNullOrEmpty(currentQuery) && (currentPage == "Home" || currentPage == "Settings" || currentPage == "Wrist Layout" || currentPage == "Player ESP" || currentPage == "Gun Studio"))
+                featureScroll = null;
             DestroyChildren(pageRoot);
             if (string.IsNullOrEmpty(currentQuery) && currentPage == "Home")
                 DrawHome();
@@ -413,7 +432,7 @@ namespace Volas
             MakeSlider(appearance, "Opacity", 15f, 73f, 206f,
                 .72f, 1f, plugin.Settings.DesktopOpacity.Value,
                 v => plugin.Settings.DesktopOpacity.Value = v);
-            MakeText(appearance, "Visual theme: OLED / grayscale",
+            MakeText(appearance, "Visual theme: Midnight / indigo",
                 14f, 115f, 207f, 27f, 10, muted);
             MakeButton(appearance, "Rainbow accents",
                 plugin.RainbowTheme ? "RAINBOW ON" : "RAINBOW OFF",
@@ -594,87 +613,68 @@ namespace Volas
             slider.onValueChanged.AddListener(v => onValue(v));
         }
 
-                private void DrawFeaturePage()
+        private void DrawFeaturePage()
         {
-            string pageName = string.IsNullOrWhiteSpace(currentQuery)
-                ? currentPage : "Search results";
             var matches = GetVisibleFeatures();
-            MakeText(pageRoot, pageName, 4f, 0f, 410f, 27f, 14, white, true);
-            MakeText(pageRoot, matches.Count + " available", 607f, 7f, 115f, 20f,
-                10, muted);
-
-            Image leftPanel = MakeImage(pageRoot, "Mods list", panelColor, softRounded, true);
-            Place(leftPanel.rectTransform, 0f, 34f, 459f, 340f);
-            Image rightPanel = MakeImage(pageRoot, "Feature details", panelColor, softRounded, true);
-            Place(rightPanel.rectTransform, 470f, 34f, 260f, 340f);
-
-            MakeText(leftPanel.rectTransform, "mods", 12f, 8f, 200f, 20f, 10, muted);
-            MakeText(rightPanel.rectTransform, "details", 12f, 8f, 190f, 20f, 10, muted);
-
-            RectTransform viewport = MakeRect(leftPanel.rectTransform, "Feature scroll viewport");
-            Place(viewport, 7f, 35f, 445f, 298f);
-            viewport.gameObject.AddComponent<Image>().color = new Color(0.000f, 0.000f, 0.000f, .001f);
+            string key = currentPage + "|" + currentQuery;
+            float oldScroll = featureScroll != null && scrollKey == key
+                ? featureScroll.verticalNormalizedPosition : 1f;
+            scrollKey = key;
+            RectTransform viewport = MakeRect(pageRoot, "Feature scroll viewport");
+            Place(viewport, 0f, 0f, 730f, 508f);
+            viewport.gameObject.AddComponent<Image>().color = new Color(0f, 0f, 0f, .001f);
             viewport.gameObject.AddComponent<RectMask2D>();
-            ScrollRect scroller = viewport.gameObject.AddComponent<ScrollRect>();
-            scroller.vertical = true;
-            scroller.horizontal = false;
-            scroller.movementType = ScrollRect.MovementType.Clamped;
-            scroller.scrollSensitivity = 20f;
+            featureScroll = viewport.gameObject.AddComponent<ScrollRect>();
+            featureScroll.vertical = true;
+            featureScroll.horizontal = false;
+            featureScroll.movementType = ScrollRect.MovementType.Clamped;
+            featureScroll.scrollSensitivity = 32f;
             RectTransform list = MakeRect(viewport, "Features");
-            AnchorTopLeft(list);
-            list.sizeDelta = new Vector2(440f, Mathf.Max(298f, matches.Count * 57f));
-            scroller.viewport = viewport;
-            scroller.content = list;
+            list.sizeDelta = new Vector2(730f, Mathf.Max(508f, ((matches.Count + 1) / 2) * 42f));
+            featureScroll.viewport = viewport;
+            featureScroll.content = list;
 
-            if (selected == null || !matches.Contains(selected))
-                selected = matches.Count > 0 ? matches[0] : null;
             for (int i = 0; i < matches.Count; i++)
             {
                 Feature mod = matches[i];
-                float y = i * 57f;
-                var row = MakeImage(list, "Mod " + mod.Id,
-                    selected == mod ? hoverColor : new Color(0.062f, 0.062f, 0.062f, .33f),
-                    softRounded, true);
-                Place(row.rectTransform, 2f, y + 1f, 431f, 53f);
-                row.raycastTarget = true;
-                Button choose = row.gameObject.AddComponent<Button>();
-                choose.transition = Selectable.Transition.None;
-                choose.onClick.AddListener(() =>
-                {
-                    selected = mod;
-                    RedrawPage();
-                });
-                if (mod.Enabled)
-                {
-                    Image activeMark = MakeImage(row.rectTransform, "Active", accentGray);
-                    Place(activeMark.rectTransform, 0f, 9f, 2f, 34f);
-                }
-                MakeText(row.rectTransform, mod.Label, 12f, 5f, 272f, 20f,
-                    11, white, true);
-                MakeText(row.rectTransform, Truncate(mod.Description, 65),
-                    12f, 27f, 295f, 20f, 10, muted);
-                var fav = MakeButton(row.rectTransform, "Favorite",
-                    plugin.Features.IsFavorite(mod) ? "★" : "☆",
-                    316f, 9f, 31f, 31f, Color.clear, () =>
-                    {
-                        plugin.Features.ToggleFavorite(mod);
-                        RedrawPage();
-                    }, plugin.Features.IsFavorite(mod) ? accentGray : muted, 17);
-                MakeButton(row.rectTransform, "Toggle " + mod.Id,
-                    mod.ActionOnly ? "RUN" : mod.Enabled ? "ON" : "OFF",
-                    353f, 13f, 63f, 28f,
-                    mod.Enabled ? accentGray : new Color(0.123f, 0.123f, 0.123f, 1f),
-                    () =>
+                float x = (i % 2) * 366f;
+                float y = (i / 2) * 42f;
+                var row = MakeButton(list, "Mod " + mod.Id, "", x, y, 358f, 36f,
+                    panelColor, () =>
                     {
                         plugin.Features.Activate(mod);
                         selected = mod;
                         RedrawPage();
-                    }, white, 10, true);
+                    });
+                var rt = row.transform as RectTransform;
+                var label = MakeText(rt, Truncate(mod.Label, 34), 12f, 0f, 282f, 36f, 13, white, true);
+                label.horizontalOverflow = HorizontalWrapMode.Wrap;
+                if (mod.ActionOnly)
+                {
+                    MakeText(rt, "›", 333f, 0f, 20f, 36f, 17, muted, true);
+                }
+                else
+                {
+                    var track = MakeImage(rt, "Switch track",
+                        mod.Enabled ? accentGray : new Color(.085f, .093f, .145f, 1f),
+                        rounded, false);
+                    Place(track.rectTransform, 307f, 9f, 40f, 18f);
+                    var knob = MakeImage(rt, "Switch knob",
+                        mod.Enabled ? white : new Color(.39f, .41f, .51f, 1f),
+                        rounded, false);
+                    Place(knob.rectTransform, mod.Enabled ? 330f : 309f, 11f, 14f, 14f);
+                }
+                MakeButton(rt, "Favorite " + mod.Id, plugin.Features.IsFavorite(mod) ? "★" : "☆",
+                    282f, 5f, 23f, 26f, Color.clear, () =>
+                    {
+                        plugin.Features.ToggleFavorite(mod);
+                        RedrawPage();
+                    }, plugin.Features.IsFavorite(mod) ? accentGray : muted, 13);
             }
             if (matches.Count == 0)
-                MakeText(leftPanel.rectTransform, "No working mods registered in this category.",
-                    17f, 70f, 410f, 50f, 12, muted);
-            DrawDetails(rightPanel.rectTransform);
+                MakeText(list, "No features available in this category.", 12f, 12f, 680f, 36f, 13, muted);
+            Canvas.ForceUpdateCanvases();
+            featureScroll.verticalNormalizedPosition = Mathf.Clamp01(oldScroll);
         }
 
         private void DrawDetails(RectTransform container)
