@@ -10,6 +10,8 @@ namespace Volas
     [BepInPlugin("com.volas.gtag", "Volas", "1.4.0")]
     public sealed class VolasPlugin : BaseUnityPlugin
     {
+        #region Services & runtime state
+
         internal static VolasPlugin Instance { get; private set; }
         internal ManualLogSource Log { get { return Logger; } }
         internal GameBridge Game { get; private set; }
@@ -32,6 +34,10 @@ namespace Volas
         private bool desktopFaultLogged;
         private bool vrFaultLogged;
         private readonly List<InputDevice> leftControllerCandidates = new List<InputDevice>(4);
+
+        #endregion
+
+        #region Menu & theme properties
 
         internal bool VrOpen { get; set; }
         internal bool DesktopOpen { get; set; }
@@ -58,10 +64,18 @@ namespace Volas
             }
         }
 
+        #endregion
+
+        #region Frame telemetry
+
         internal float FramesPerSecond { get; private set; }
         internal float FrameMilliseconds { get { return smoothFrameDelta * 1000f; } }
         internal float SessionStarted { get; private set; }
         private float smoothFrameDelta = 1f / 90f;
+
+        #endregion
+
+        #region Unity lifecycle & frame updates
 
         private void Awake()
         {
@@ -183,6 +197,10 @@ namespace Volas
             }
         }
 
+        #endregion
+
+        #region Controller input
+
         /// <summary>
         /// OpenXR/XR SDKs do not all expose Y the same way. Read the standard
         /// XR secondaryButton on the left device, then tracked left-handed
@@ -228,6 +246,10 @@ namespace Volas
             }
         }
 
+        #endregion
+
+        #region Physics & shutdown
+
         private void FixedUpdate()
         {
             if (Features != null)
@@ -255,5 +277,7 @@ namespace Volas
             if (Game != null) Game.Dispose();
             Instance = null;
         }
+
+        #endregion
     }
 }

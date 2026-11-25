@@ -5,6 +5,8 @@ namespace Volas
 {
     internal sealed class VolasConfiguration
     {
+        #region General controls & appearance
+
         internal readonly ConfigEntry<KeyboardShortcut> DesktopShortcut;
         internal readonly ConfigEntry<KeyboardShortcut> LegacyDesktopShortcut;
         internal readonly ConfigEntry<float> LegacyWindowX;
@@ -22,6 +24,10 @@ namespace Volas
         internal readonly ConfigEntry<bool> VrPointerRay;
         internal readonly ConfigEntry<bool> VrNotifications;
         internal readonly ConfigEntry<float> DesktopOpacity;
+        #endregion
+
+        #region Desktop visual effects & audio
+
         internal readonly ConfigEntry<bool> DesktopGlass;
         internal readonly ConfigEntry<float> DesktopBlurStrength;
         internal readonly ConfigEntry<bool> DesktopBloom;
@@ -29,6 +35,10 @@ namespace Volas
         internal readonly ConfigEntry<bool> DesktopMotion;
         internal readonly ConfigEntry<bool> DesktopSounds;
         internal readonly ConfigEntry<float> DesktopSoundVolume;
+        #endregion
+
+        #region Marker & wrist settings
+
         internal readonly ConfigEntry<float> MarkerRange;
         internal readonly ConfigEntry<float> MarkerRefresh;
         internal readonly ConfigEntry<int> MarkerLimit;
@@ -36,6 +46,10 @@ namespace Volas
         internal readonly ConfigEntry<float> VrOffsetX;
         internal readonly ConfigEntry<float> VrOffsetY;
         internal readonly ConfigEntry<float> VrOffsetZ;
+        #endregion
+
+        #region Pointer configuration
+
         internal readonly ConfigEntry<float> GunDistance;
         internal readonly ConfigEntry<float> GunBeamWidth;
         internal readonly ConfigEntry<float> GunReticleSize;
@@ -49,11 +63,19 @@ namespace Volas
         internal readonly ConfigEntry<float> GunAnimationSpeed;
         internal readonly ConfigEntry<float> GunMarkScale;
         internal readonly ConfigEntry<float> GunMarkLifetime;
+        #endregion
+
+        #region Saved preferences
+
         internal readonly ConfigEntry<string> FavoriteIds;
         internal readonly ConfigEntry<float> WindowX;
         internal readonly ConfigEntry<float> WindowY;
         internal readonly ConfigEntry<float> WindowWidth;
         internal readonly ConfigEntry<float> WindowHeight;
+
+        #endregion
+
+        #region Configuration bindings
 
         internal VolasConfiguration(ConfigFile config)
         {
@@ -147,5 +169,7 @@ namespace Volas
             WindowWidth = config.Bind("Desktop", "Window width", 760f, "Desktop window width.");
             WindowHeight = config.Bind("Desktop", "Window height", 500f, "Desktop window height.");
         }
+
+        #endregion
     }
 }

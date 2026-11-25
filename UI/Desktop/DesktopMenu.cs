@@ -10,6 +10,8 @@ namespace Volas
     // All feature actions go through the existing FeatureRegistry.
     internal sealed class DesktopMenu
     {
+        #region State & UI references
+
         private readonly VolasPlugin plugin;
         private readonly GameObject root;
         private readonly Canvas canvas;
@@ -31,7 +33,9 @@ namespace Volas
         private float pageTransition = 1f;
         private int openGeneration;
         private bool waitingForBackdrop;
-        private readonly List<Image> accentGlows = new List<Image>();
+        private readonly Dictionary<Image, float> accentGlows = new Dictionary<Image, float>();
+        private readonly List<Image> expiredGlows = new List<Image>();
+        private float lastBloomAmount = -1f;
         private ScrollRect featureScroll;
         private string scrollKey = "";
         private readonly Text hudText;
@@ -51,6 +55,10 @@ namespace Volas
         private CursorLockMode savedLockMode;
         private float lastStatusUpdate;
         private float lastHUDUpdate;
+        #endregion
+
+        #region Theme & navigation
+
         private readonly Color ink = new Color(.022f, .026f, .050f, .99f);
         private readonly Color headerColor = new Color(.025f, .030f, .050f, .85f);
         private readonly Color panelColor = new Color(.039f, .044f, .068f, .88f);
@@ -67,6 +75,10 @@ namespace Volas
             "VR Rig", "Overpowered", "Master", "Global", "#LIBRARY",
             "Local", "Favorites", "Enabled", "All", "Plugin", "Safety"
         };
+
+        #endregion
+
+        #region Initialization
 
         internal DesktopMenu(VolasPlugin owner)
         {
@@ -159,6 +171,8 @@ namespace Volas
                 panelColor, () => Navigate("Settings"), muted, 17);
             MakeButton(sidebar.rectTransform, "Favorites", "★", 39f, 469f, 25f, 24f,
                 panelColor, () => Navigate("Favorites"), muted, 14);
+            MakeButton(sidebar.rectTransform, "Effects shortcut", "FX", 68f, 469f, 31f, 24f,
+                panelColor, () => Navigate("UI Effects"), muted, 10, true);
             MakeButton(sidebar.rectTransform, "VR menu", "VR", 104f, 469f, 35f, 24f,
                 hoverColor, () => { plugin.VrOpen = true; plugin.DesktopOpen = false; }, white, 10, true);
 
@@ -192,6 +206,10 @@ namespace Volas
             window.gameObject.SetActive(false);
         }
 
+        #endregion
+
+        #region Font & input system
+
         private static Font ResolveFont()
         {
             Font result = null;
@@ -221,6 +239,10 @@ namespace Volas
                 addedInputModule.enabled = false;
             }
         }
+
+        #endregion
+
+        #region Search & sidebar navigation
 
         private void BuildSearch()
         {
@@ -264,7 +286,12 @@ namespace Volas
                 var btn = MakeButton(navigationContent, "Tab " + tab, label,
                     0f, y, 133f, 23f, active ? hoverColor : panelColor,
                     () => Navigate(chosen), active ? white : muted, 11, active);
-                if (active) AddAccentGlow(btn.transform as RectTransform, 2f, 1f, 129f, 21f, .28f, true);
+                if (active)
+                {
+                    AddAccentGlow(btn.transform as RectTransform, 2f, 1f, 129f, 21f, .28f, true);
+                    var indicator = MakeImage(btn.transform, "Active category indicator", accentGray, softRounded, true);
+                    Place(indicator.rectTransform, 0f, 4f, 3f, 15f);
+                }
                 Text t = btn.GetComponentInChildren<Text>();
                 if (t != null)
                 {
@@ -293,9 +320,14 @@ namespace Volas
             var scroll = navigationContent.parent.GetComponent<ScrollRect>();
             float position = scroll != null ? scroll.verticalNormalizedPosition : 1f;
             DestroyChildren(navigationContent);
+            PruneGlows();
             BuildNavigation();
             if (scroll != null) scroll.verticalNormalizedPosition = position;
         }
+
+        #endregion
+
+        #region Window lifecycle
 
         internal void Tick()
         {
@@ -374,6 +406,10 @@ namespace Volas
             }
         }
 
+        #endregion
+
+        #region Animation & bloom
+
         private void UpdatePolish(bool open)
         {
             float target = open && !waitingForBackdrop ? 1f : 0f;
@@ -394,13 +430,16 @@ namespace Volas
                 pageFade.alpha = pageTransition * pageTransition * (3f - 2f * pageTransition);
             }
             float amount = plugin.Settings.DesktopBloom.Value ? plugin.Settings.DesktopBloomStrength.Value : 0f;
-            for (int i = accentGlows.Count - 1; i >= 0; i--)
+            if (Mathf.Abs(amount - lastBloomAmount) > .001f)
             {
-                var glow = accentGlows[i];
-                if (glow == null) { accentGlows.RemoveAt(i); continue; }
-                var tint = glow.color;
-                tint.a = amount * (glow.gameObject.name == "Volas logo glow" ? .45f : .55f);
-                glow.color = tint;
+                lastBloomAmount = amount;
+                foreach (var entry in accentGlows)
+                {
+                    if (entry.Key == null) continue;
+                    var tint = entry.Key.color;
+                    tint.a = amount * entry.Value;
+                    entry.Key.color = tint;
+                }
             }
         }
 
@@ -411,8 +450,20 @@ namespace Volas
                 polish.GlowSprite, false);
             Place(image.rectTransform, x, y, w, h);
             if (behind) image.transform.SetAsFirstSibling();
-            accentGlows.Add(image);
+            accentGlows.Add(image, alpha);
         }
+
+        private void PruneGlows()
+        {
+            expiredGlows.Clear();
+            foreach (var entry in accentGlows)
+                if (entry.Key == null || !entry.Key.transform.IsChildOf(window)) expiredGlows.Add(entry.Key);
+            foreach (var image in expiredGlows) accentGlows.Remove(image);
+        }
+
+        #endregion
+
+        #region HUD
 
         private void UpdateHUD()
         {
@@ -425,6 +476,10 @@ namespace Volas
             if (!visible) root.SetActive(window.gameObject.activeSelf || polish.AudioPlaying || hasText || plugin.Effects.DesktopCrosshair);
         }
 
+        #endregion
+
+        #region Page routing & home
+
         private void RedrawPage()
         {
             if (pageRoot == null) return;
@@ -434,6 +489,7 @@ namespace Volas
             if (string.IsNullOrEmpty(currentQuery) && (currentPage == "Home" || currentPage == "Settings" || currentPage == "Wrist Layout" || currentPage == "Player ESP" || currentPage == "Gun Studio" || currentPage == "UI Effects"))
                 featureScroll = null;
             DestroyChildren(pageRoot);
+            PruneGlows();
             if (string.IsNullOrEmpty(currentQuery) && currentPage == "Home")
                 DrawHome();
             else if (string.IsNullOrEmpty(currentQuery) && currentPage == "Settings")
@@ -489,6 +545,10 @@ namespace Volas
                 }
             }
         }
+
+        #endregion
+
+        #region Settings pages
 
         private void DrawSettingsPage()
         {
@@ -704,30 +764,57 @@ namespace Volas
                 14f, 222f, 204f, 75f, 11, muted);
         }
 
-                private void MakeSlider(Transform parent, string title,
+        #endregion
+
+        #region Slider controls
+
+        private void MakeSlider(Transform parent, string title,
             float x, float y, float width,
             float min, float max, float value, Action<float> onValue)
         {
             var rt = MakeRect(parent, title + " slider");
-            Place(rt, x, y, width, 24f);
-            var track = MakeImage(rt, "Track", new Color(0.143f, 0.143f, 0.143f, .9f),
-                softRounded, true);
-            Place(track.rectTransform, 0f, 9f, width, 6f);
-            var fill = MakeImage(rt, "Fill", accentGray, softRounded, true);
-            Place(fill.rectTransform, 0f, 9f, width, 6f);
-            var handle = MakeImage(rt, "Handle", white, rounded, true);
-            Place(handle.rectTransform, 0f, 5f, 14f, 14f);
-            handle.raycastTarget = true;
+            Place(rt, x, y, width, 28f);
+            var hit = rt.gameObject.AddComponent<Image>();
+            hit.color = Color.clear;
+            hit.raycastTarget = true;
+
+            float railWidth = width - 52f;
+            var track = MakeImage(rt, "Track", new Color(.10f, .11f, .17f, 1f), softRounded, true);
+            Place(track.rectTransform, 7f, 11f, railWidth - 14f, 6f);
+            var fillArea = MakeRect(rt, "Fill area");
+            Place(fillArea, 7f, 11f, railWidth - 14f, 6f);
+            var fill = MakeImage(fillArea, "Fill", accentGray, softRounded, true);
+            Stretch(fill.rectTransform);
+
+            var handleArea = MakeRect(rt, "Handle travel");
+            Place(handleArea, 7f, 0f, railWidth - 14f, 28f);
+            var handle = MakeImage(handleArea, "Handle", white, rounded, false);
+            var h = handle.rectTransform;
+            h.anchorMin = new Vector2(0f, .5f); h.anchorMax = h.anchorMin;
+            h.pivot = new Vector2(.5f, .5f); h.sizeDelta = new Vector2(14f, 14f);
+            h.anchoredPosition = Vector2.zero;
+            var number = MakeText(rt, value.ToString("0.##"), railWidth + 4f, 0f, 48f, 28f, 11, white, true);
+            number.alignment = TextAnchor.MiddleRight;
+
             var slider = rt.gameObject.AddComponent<Slider>();
             slider.direction = Slider.Direction.LeftToRight;
+            slider.targetGraphic = handle;
             slider.transition = Selectable.Transition.None;
             slider.fillRect = fill.rectTransform;
             slider.handleRect = handle.rectTransform;
             slider.minValue = min;
             slider.maxValue = max;
             slider.value = value;
-            slider.onValueChanged.AddListener(v => onValue(v));
+            slider.onValueChanged.AddListener(v =>
+            {
+                number.text = v.ToString("0.##");
+                onValue(v);
+            });
         }
+
+        #endregion
+
+        #region Feature browser
 
         private void DrawFeaturePage()
         {
@@ -866,6 +953,10 @@ namespace Volas
             }
         }
 
+        #endregion
+
+        #region Window positioning
+
         private void ClampWindow()
         {
             Vector2 p = window.anchoredPosition;
@@ -885,6 +976,10 @@ namespace Volas
             plugin.Settings.WindowHeight.Value = window.sizeDelta.y * window.localScale.y;
         }
 
+        #endregion
+
+        #region Resource cleanup
+
         internal void Dispose()
         {
             if (visible)
@@ -894,6 +989,8 @@ namespace Volas
             }
             ++openGeneration;
             visible = false;
+            accentGlows.Clear();
+            expiredGlows.Clear();
             polish.Dispose();
             if (root != null) UnityEngine.Object.Destroy(root);
             if (createdEventSystem != null)
@@ -913,6 +1010,10 @@ namespace Volas
                 if (texture != null) UnityEngine.Object.Destroy(texture);
             }
         }
+
+        #endregion
+
+        #region UI building utilities
 
         private static string Truncate(string s, int length)
         {
@@ -1059,12 +1160,16 @@ namespace Volas
                 new Vector2(.5f, .5f), 100f, 0, SpriteMeshType.FullRect,
                 new Vector4(border, border, border, border));
         }
+
+        #endregion
     }
 
     // Handles moving/resizing without intercepting unrelated feature buttons.
     internal sealed class VolasUIDrag : MonoBehaviour,
         IBeginDragHandler, IDragHandler, IEndDragHandler
     {
+        #region Drag state
+
         internal RectTransform Target;
         internal bool IsResize;
         internal Action OnComplete;
@@ -1072,6 +1177,10 @@ namespace Volas
         private Vector2 originalPosition;
         private Vector2 originalSize;
         private Vector3 originalScale;
+
+        #endregion
+
+        #region Pointer drag lifecycle
 
         public void OnBeginDrag(PointerEventData e)
         {
@@ -1106,5 +1215,7 @@ namespace Volas
         {
             if (OnComplete != null) OnComplete();
         }
+
+        #endregion
     }
 }

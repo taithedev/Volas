@@ -5,6 +5,8 @@ namespace Volas
     /// <summary>Independent Unity IMGUI interface for local telemetry and menu preferences.</summary>
     internal sealed class LegacyDesktopMenu
     {
+        #region State
+
         private readonly VolasPlugin plugin;
         private Rect window;
         private bool visible;
@@ -12,6 +14,10 @@ namespace Volas
         private CursorLockMode savedLock;
         private string search = "";
         private Vector2 scroll;
+
+        #endregion
+
+        #region Initialization & visibility
 
         internal LegacyDesktopMenu(VolasPlugin owner)
         {
@@ -46,6 +52,10 @@ namespace Volas
             plugin.Settings.LegacyWindowX.Value = window.x;
             plugin.Settings.LegacyWindowY.Value = window.y;
         }
+
+        #endregion
+
+        #region IMGUI rendering
 
         internal void Draw()
         {
@@ -113,5 +123,7 @@ namespace Volas
             bool enabled = GUILayout.Toggle(feature.Enabled, feature.Label);
             if (enabled != feature.Enabled) plugin.Features.Activate(feature);
         }
+
+        #endregion
     }
 }

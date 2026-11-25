@@ -10,6 +10,8 @@ namespace Volas
     // UI and interaction use the same local coordinate system.
     internal sealed class VrMenu
     {
+        #region Layout, state & palette
+
         private const float Unit = .0005f;
         private const float Width = 480f, Height = 640f;
         private const int PerPage = 4;
@@ -53,6 +55,10 @@ namespace Volas
             internal Action Action;
             internal bool Selected, Available;
         }
+
+        #endregion
+
+        #region Initialization & frame update
 
         internal VrMenu(VolasPlugin owner) { plugin = owner; }
 
@@ -182,6 +188,10 @@ namespace Volas
             slots[index].Action?.Invoke();
         }
 
+        #endregion
+
+        #region World-space UI construction
+
         private void Create()
         {
             font = RuntimeFont();
@@ -297,6 +307,10 @@ namespace Volas
             s.Image.color=s.Selected?(hover ? new Color32(210,210,218,255) : White):hover?Gray:Surface;
             s.Text.color=s.Selected?Ink:s.Available?White:Muted;
         }
+        #endregion
+
+        #region Category & page state
+
         private void Refresh()
         {
             dirty=false; revision=plugin.Features.Revision; hovered=-1;
@@ -364,6 +378,10 @@ namespace Volas
                 labels[i].resizeTextMinSize=Mathf.Min(size,Mathf.RoundToInt(22f*scale));
             }
         }
+        #endregion
+
+        #region Pointer & controller input
+
         private int Hit(float x,float y)
         {
             for(int i=slots.Count-1;i>=0;i--)
@@ -409,11 +427,17 @@ namespace Volas
             bool pressed;if(d.TryGetFeatureValue(CommonUsages.triggerButton,out pressed)&&pressed)return true;
             float v;return d.TryGetFeatureValue(CommonUsages.trigger,out v)&&v>=.65f;
         }
+        #endregion
+
+        #region Resource cleanup
+
         internal void Dispose()
         {
             if(root!=null)UnityEngine.Object.Destroy(root);
             if(pointerMaterial!=null)UnityEngine.Object.Destroy(pointerMaterial);
             root=null;slots.Clear();labels.Clear();fontSizes.Clear();
         }
+
+        #endregion
     }
 }

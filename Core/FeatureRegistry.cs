@@ -5,6 +5,8 @@ namespace Volas
 {
     internal sealed class Feature
     {
+        #region Feature metadata
+
         internal readonly string Id;
         internal readonly string Category;
         internal readonly string Label;
@@ -16,6 +18,10 @@ namespace Volas
         internal readonly Action<VolasPlugin> OnUpdate;
         internal readonly Action<VolasPlugin> OnFixedUpdate;
         internal bool Enabled;
+
+        #endregion
+
+        #region Construction
 
         internal Feature(string id, string category, string label, string description,
             Action<VolasPlugin> onEnable, Action<VolasPlugin> onDisable = null,
@@ -33,10 +39,14 @@ namespace Volas
             ActionOnly = actionOnly;
             NeedsModdedRoom = needsModdedRoom;
         }
+
+        #endregion
     }
 
     internal sealed class FeatureRegistry
     {
+        #region Registry state
+
         private readonly VolasPlugin plugin;
         internal readonly List<Feature> All = new List<Feature>();
         internal readonly List<string> Categories = new List<string>();
@@ -45,6 +55,10 @@ namespace Volas
         internal string LastMessage { get; private set; } = "Ready";
 
         internal FeatureRegistry(VolasPlugin owner) { plugin = owner; }
+
+        #endregion
+
+        #region Registration & discovery
 
         internal void Add(Feature f)
         {
@@ -74,6 +88,10 @@ namespace Volas
                 : All.FindAll(f => f.Category == category);
         }
 
+        #endregion
+
+        #region Favorites
+
         internal bool IsFavorite(Feature feature)
         {
             return feature != null && favorites.Contains(feature.Id);
@@ -100,6 +118,10 @@ namespace Volas
             LastMessage = feature.Label + (IsFavorite(feature) ? " added to favorites" : " removed from favorites");
             Revision++;
         }
+
+        #endregion
+
+        #region Activation & error handling
 
         internal void Activate(Feature f)
         {
@@ -156,6 +178,10 @@ namespace Volas
             plugin.Log.LogError("Volas feature " + f.Id + " failed: " + ex);
         }
 
+        #endregion
+
+        #region Runtime updates & reset
+
         internal void Tick()
         {
             bool? roomAllowed = null;
@@ -203,5 +229,7 @@ namespace Volas
             if (plugin.ExtraVisuals != null)
                 plugin.ExtraVisuals.Reset();
         }
+
+        #endregion
     }
 }

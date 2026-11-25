@@ -9,6 +9,8 @@ namespace Volas
 {
     internal sealed class VolasDesktopEffects
     {
+        #region State & resources
+
         private readonly VolasPlugin plugin;
         private readonly RectTransform window;
         private readonly Sprite maskSprite;
@@ -23,6 +25,10 @@ namespace Volas
         private float lastClick = -10f;
         internal Sprite GlowSprite { get; private set; }
         internal bool AudioPlaying { get { return audio != null && audio.isPlaying; } }
+
+        #endregion
+
+        #region Procedural asset initialization
 
         internal VolasDesktopEffects(VolasPlugin owner, RectTransform target, Sprite mask)
         {
@@ -65,6 +71,10 @@ namespace Volas
             };
         }
 
+        #endregion
+
+        #region Acrylic UI construction
+
         internal void BuildBackdrop()
         {
             var holder = new GameObject("Acrylic clipping mask", typeof(RectTransform), typeof(Image), typeof(Mask));
@@ -95,6 +105,10 @@ namespace Volas
             rt.offsetMin = new Vector2(inset, inset); rt.offsetMax = new Vector2(-inset, -inset);
             rt.localScale = Vector3.one;
         }
+
+        #endregion
+
+        #region Backdrop capture & rendering
 
         // Capture only before the menu appears. Reflection avoids a mandatory
         // UnityEngine.ScreenCaptureModule reference on differing game installs.
@@ -166,6 +180,10 @@ namespace Volas
             if (blurred != null) { blurred.Release(); UnityEngine.Object.Destroy(blurred); blurred = null; }
         }
 
+        #endregion
+
+        #region Procedural audio
+
         private static AudioClip Tone(string name, float seconds, float start, float end)
         {
             const int rate = 24000;
@@ -193,12 +211,20 @@ namespace Volas
             audio.PlayOneShot(sounds[index], Mathf.Clamp01(plugin.Settings.DesktopSoundVolume.Value) * (index == 0 ? .45f : 1f));
         }
 
+        #endregion
+
+        #region Button integration
+
         internal void Wire(Button button, Action callback)
         {
             var feedback = button.gameObject.AddComponent<VolasDesktopButtonFeedback>();
             feedback.Initialize(this, plugin, button);
             button.onClick.AddListener(() => { Play(1); if (callback != null) callback(); });
         }
+
+        #endregion
+
+        #region Resource cleanup
 
         internal void Dispose()
         {
@@ -209,10 +235,14 @@ namespace Volas
             if (GlowSprite != null) UnityEngine.Object.Destroy(GlowSprite);
             UnityEngine.Object.Destroy(glowTexture); UnityEngine.Object.Destroy(grainTexture);
         }
+
+        #endregion
     }
 
     internal sealed class VolasDesktopButtonFeedback : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler, IPointerDownHandler, IPointerUpHandler
     {
+        #region Feedback state & setup
+
         private VolasDesktopEffects effects;
         private VolasPlugin plugin;
         private Button button;
@@ -221,10 +251,18 @@ namespace Volas
         {
             effects = fx; plugin = owner; button = target;
         }
+        #endregion
+
+        #region Pointer interaction
+
         public void OnPointerEnter(PointerEventData eventData) { if (button != null && button.IsInteractable()) effects.Play(0); }
         public void OnPointerExit(PointerEventData eventData) { held = false; }
         public void OnPointerDown(PointerEventData eventData) { if (eventData.button == PointerEventData.InputButton.Left && button != null && button.IsInteractable()) held = true; }
         public void OnPointerUp(PointerEventData eventData) { held = false; }
+        #endregion
+
+        #region Motion & reset
+
         private void Update()
         {
             if (plugin == null) return;
@@ -233,5 +271,7 @@ namespace Volas
             transform.localScale = new Vector3(scale, scale, 1f);
         }
         private void OnDisable() { held = false; transform.localScale = Vector3.one; }
+
+        #endregion
     }
 }
