@@ -7,7 +7,7 @@ using UnityEngine.XR;
 
 namespace Volas
 {
-    [BepInPlugin("com.volas.gtag", "Volas", "1.7.0")]
+    [BepInPlugin("com.volas.gtag", "Volas", "1.8.0")]
     public sealed class VolasPlugin : BaseUnityPlugin
     {
         #region Services & runtime state
@@ -118,7 +118,11 @@ namespace Volas
             smoothFrameDelta = Mathf.Lerp(smoothFrameDelta, Mathf.Max(Time.unscaledDeltaTime, 0.00001f), 0.06f);
             FramesPerSecond = 1f / smoothFrameDelta;
             Licensing.Tick();
-            if (!Licensing.Authenticated) { if (desktop != null) desktop.Tick(); return; }
+            if (!Licensing.Authenticated)
+            {
+                try { if (desktop != null) desktop.Tick(); } catch (Exception ex) { if (!desktopFaultLogged) { desktopFaultLogged = true; Logger.LogError("Volas desktop: " + ex.Message); } }
+                return;
+            }
             Game.Refresh();
             Community.Tick();
 
@@ -137,6 +141,8 @@ namespace Volas
             if (Settings.ResetShortcut.Value.IsDown())
             {
                 Features.DisableAll();
+                Licensing.SetCommunityEffects(false);
+                Community.Hide();
                 Logger.LogInfo("Volas: all active features disabled.");
             }
 

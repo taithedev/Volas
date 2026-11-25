@@ -36,6 +36,10 @@ namespace Volas
         private readonly Dictionary<Image, float> accentGlows = new Dictionary<Image, float>();
         private readonly List<Image> expiredGlows = new List<Image>();
         private float lastBloomAmount = -1f;
+        private const int FeaturesPerPage = 16;
+        private int featurePage, lastFeatureTotal;
+        private bool featureListVisible;
+        private Text featureDetail;
         private ScrollRect featureScroll;
         private string scrollKey = "";
         private readonly Text hudText;
@@ -45,7 +49,7 @@ namespace Volas
         private readonly Sprite rounded;
         private readonly Sprite softRounded;
         private readonly DesktopIcons icons = new DesktopIcons();
-        private Text ownerTelemetry, ownerFaults, communityStatus;
+        private Text ownerTelemetry, ownerFaults, communityStatus, homeStats;
         private InputField searchBox;
         private string currentPage = "Home";
         private string currentQuery = "";
@@ -88,7 +92,7 @@ namespace Volas
         {
             "Home", "Players", "#FEATURES", "Movement", "Visuals", "Fun", "Charms", "Projectiles",
             "#COLLECTION", "Local", "Favorites", "Enabled", "All", "Community",
-            "#TOOLS", "Player ESP", "Charm Studio", "Gun Studio", "Wrist Layout", "UI Effects", "Settings", "Plugin", "Safety", "Owner"
+            "#TOOLS", "Player ESP", "Charm Studio", "Gun Studio", "Wrist Layout", "UI Effects", "Settings", "Plugin", "Safety", "Account", "Owner"
         };
 
         #endregion
@@ -153,7 +157,7 @@ namespace Volas
             AddAccentGlow(sidebar.rectTransform, 4f, 2f, 83f, 37f, .36f);
             AddIcon(sidebar.rectTransform, "Volas", 12f, 12f, 25f, accentGray);
             MakeText(sidebar.rectTransform, "VOLAS", 43f, 8f, 98f, 24f, 16, white, true);
-            MakeText(sidebar.rectTransform, "v1.7.0", 44f, 29f, 90f, 15f, 10, muted);
+            MakeText(sidebar.rectTransform, "v1.8.0", 44f, 29f, 90f, 15f, 10, muted);
             var brandLine = MakeImage(sidebar.rectTransform, "Brand divider", borderColor);
             Place(brandLine.rectTransform, 10f, 50f, 128f, 1f);
 
@@ -281,6 +285,7 @@ namespace Volas
             searchBox.onValueChanged.AddListener(value =>
             {
                 currentQuery = value ?? "";
+                featurePage = 0;
                 searchPending = true;
                 searchDue = Time.unscaledTime + .12f;
             });
@@ -326,9 +331,11 @@ namespace Volas
         private void Navigate(string name)
         {
             if (name == "Owner" && !plugin.Licensing.IsOwner) return;
+            if (name == "Account") { plugin.Licensing.OpenAccountPanel(); return; }
             if (currentPage == name && string.IsNullOrEmpty(currentQuery)) return;
             if (currentPage != name) pageTransition = plugin.Settings.DesktopMotion.Value ? .18f : 1f;
             currentPage = name;
+            featurePage = 0;
             currentQuery = "";
             searchPending = false;
             if (searchBox != null && searchBox.text.Length > 0)
@@ -374,7 +381,7 @@ namespace Volas
                 windowBackground.color = new Color(ink.r, ink.g, ink.b, alpha);
                 innerBackground.color = new Color(ink.r, ink.g, ink.b, alpha);
             }
-            bool open = plugin.DesktopOpen;
+            bool open = plugin.DesktopOpen && plugin.Licensing.Authenticated && !plugin.Licensing.PanelOpen;
             if (open != visible)
             {
                 visible = open;
@@ -446,8 +453,9 @@ namespace Volas
                 string message = currentPage == "Home" ? "" : plugin.Features.LastMessage;
                 if (currentPage == "Settings" && plugin.Vr != null) message = plugin.Vr.Status + "  |  Y / F7";
                 if (currentPage == "Player ESP") message = plugin.Markers.Status;
+                if (currentPage == "Home") UpdateHomeStats();
                 if (currentPage == "Owner") UpdateOwnerPage();
-                if (currentPage == "Community") UpdateCommunityPage();
+                if (currentPage == "Community") { UpdateCommunityPage(); message = plugin.Licensing.CloudStatus; }
                 if (statusText.text != message) statusText.text = message;
             }
         }
@@ -534,10 +542,11 @@ namespace Volas
             if (pageRoot == null) return;
             drawnRevision = plugin.Features.Revision;
             drawnPage = currentPage;
-            pageTitle.text = string.IsNullOrWhiteSpace(currentQuery) ? currentPage.ToLowerInvariant() : "search results";
+            pageTitle.text = string.IsNullOrWhiteSpace(currentQuery) ? currentPage : "Search results";
             if (string.IsNullOrEmpty(currentQuery) && (currentPage == "Home" || currentPage == "Settings" || currentPage == "Wrist Layout" || currentPage == "Player ESP" || currentPage == "Gun Studio" || currentPage == "UI Effects" || currentPage == "Charm Studio" || currentPage == "Owner" || currentPage == "Community"))
                 featureScroll = null;
-            ownerTelemetry = ownerFaults = communityStatus = null;
+            ownerTelemetry = ownerFaults = communityStatus = homeStats = featureDetail = null;
+            featureListVisible = false;
             featureRows.Clear();
             DestroyChildren(pageRoot);
             PruneGlows();
@@ -580,7 +589,16 @@ namespace Volas
                 MakeText(rt, destination, 44f, 10f, 184f, 26f, 14, white, true);
                 MakeText(rt, destination == "Local" ? "Personal utilities" : hints[i], 12f, 45f, 212f, 22f, 11, muted);
             }
-            MakeText(pageRoot, "F6  Desktop     F5  Legacy     Y / F7  VR     End  Reset", 4f, 365f, 710f, 30f, 12, muted);
+            homeStats = MakeText(pageRoot, "", 4f, 353f, 710f, 28f, 13, white, true);
+            UpdateHomeStats();
+            MakeText(pageRoot, "F6 Desktop   F5 Legacy   Y / F7 VR   F8 Account   End Reset", 4f, 389f, 710f, 30f, 12, muted);
+        }
+
+        private void UpdateHomeStats()
+        {
+            if (homeStats == null) return;
+            string value = plugin.Features.All.Count + " features  /  " + plugin.Features.ActiveCount + " enabled  /  " + plugin.FramesPerSecond.ToString("0") + " FPS  /  " + (plugin.Licensing.IsOwner ? "OWNER" : "MEMBER");
+            if (homeStats.text != value) homeStats.text = value;
         }
 
         private void DrawCommunityPage()
@@ -651,7 +669,7 @@ namespace Volas
 
         private string BuildOwnerReport()
         {
-            return "Volas 1.7.0\nUnity " + Application.unityVersion + "\n" +
+            return "Volas 1.8.0\nUnity " + Application.unityVersion + "\n" +
                 plugin.FramesPerSecond.ToString("0") + " FPS / " + plugin.FrameMilliseconds.ToString("0.0") + " ms\n" +
                 "Features: " + plugin.Features.All.Count + " / active: " + plugin.Features.ActiveCount + "\n" +
                 "Marker status: " + plugin.Markers.Status + "\n" + plugin.Features.CatalogStatus + "\n" +
@@ -661,7 +679,7 @@ namespace Volas
         private void UpdateOwnerPage()
         {
             if (ownerTelemetry == null || ownerFaults == null) return;
-            string runtime = "Volas 1.7.0\nUnity " + Application.unityVersion + "\n" +
+            string runtime = "Volas 1.8.0\nUnity " + Application.unityVersion + "\n" +
                 plugin.FramesPerSecond.ToString("0") + " FPS  /  " + plugin.FrameMilliseconds.ToString("0.0") + " ms\n" +
                 plugin.Features.All.Count + " registered features\n" + plugin.Features.ActiveCount + " active features\n" +
                 plugin.Markers.Status + "\n" + plugin.Licensing.LicenseStats;
@@ -961,93 +979,92 @@ namespace Volas
 
         private void DrawFeaturePage()
         {
+            featureListVisible = true;
+            featureScroll = null;
             var matches = GetVisibleFeatures();
-            string key = currentPage + "|" + currentQuery;
-            float oldScroll = featureScroll != null && scrollKey == key
-                ? featureScroll.verticalNormalizedPosition : 1f;
-            scrollKey = key;
-            RectTransform viewport = MakeRect(pageRoot, "Feature scroll viewport");
-            Place(viewport, 0f, 0f, 730f, 508f);
-            viewport.gameObject.AddComponent<Image>().color = new Color(0f, 0f, 0f, .001f);
-            viewport.gameObject.AddComponent<RectMask2D>();
-            featureScroll = viewport.gameObject.AddComponent<ScrollRect>();
-            featureScroll.vertical = true;
-            featureScroll.horizontal = false;
-            featureScroll.movementType = ScrollRect.MovementType.Clamped;
-            featureScroll.scrollSensitivity = 32f;
-            RectTransform list = MakeRect(viewport, "Features");
-            list.sizeDelta = new Vector2(730f, Mathf.Max(508f, ((matches.Count + 1) / 2) * 42f));
-            featureScroll.viewport = viewport;
-            featureScroll.content = list;
-
-            for (int i = 0; i < matches.Count; i++)
+            lastFeatureTotal = matches.Count;
+            int pages = Mathf.Max(1, (matches.Count + FeaturesPerPage - 1) / FeaturesPerPage);
+            featurePage = Mathf.Clamp(featurePage, 0, pages - 1);
+            int start = featurePage * FeaturesPerPage;
+            int end = Mathf.Min(matches.Count, start + FeaturesPerPage);
+            MakeText(pageRoot, matches.Count + " FEATURES", 4f, 0f, 340f, 24f, 12, muted, true);
+            MakeText(pageRoot, "PAGE " + (featurePage + 1) + " / " + pages, 560f, 0f, 160f, 24f, 12, muted, true);
+            for (int i = start; i < end; i++)
             {
                 Feature mod = matches[i];
-                float x = (i % 2) * 366f;
-                float y = (i / 2) * 42f;
+                int index = i - start;
+                float x = (index % 2) * 366f;
+                float y = 30f + (index / 2) * 48f;
                 var state = new FeatureRow { Mod = mod, Enabled = mod.Enabled, IsFavorite = plugin.Features.IsFavorite(mod) };
                 featureRows.Add(state);
-                var row = MakeButton(list, "Mod " + mod.Id, "", x, y, 358f, 36f,
-                    panelColor, () =>
-                    {
-                        plugin.Features.Activate(mod);
-                        selected = mod;
-                        RefreshFeatureRows();
-                    });
-                var rt = row.transform as RectTransform;
-                AddIcon(rt, mod.Category, 9f, 9f, 18f, muted);
-                var label = MakeText(rt, Truncate(mod.Label, 32), 34f, 0f, 244f, 36f, 13, white, true);
-                label.horizontalOverflow = HorizontalWrapMode.Wrap;
-                if (mod.ActionOnly)
+                var row = MakeButton(pageRoot, "Mod " + mod.Id, "", x, y, 358f, 42f, panelColor, () =>
                 {
-                    MakeText(rt, "›", 333f, 0f, 20f, 36f, 17, muted, true);
-                }
+                    selected = mod;
+                    plugin.Features.Activate(mod);
+                    RefreshFeatureRows();
+                });
+                var rt = row.transform as RectTransform;
+                AddIcon(rt, mod.Category, 9f, 11f, 19f, muted);
+                var label = MakeText(rt, Truncate(mod.Label, 30), 35f, 1f, 238f, 23f, 13, white, true);
+                label.horizontalOverflow = HorizontalWrapMode.Wrap;
+                MakeText(rt, mod.NeedsModdedRoom ? "SOLO / MODDED ONLY" : mod.ActionOnly ? "ACTION" : "LOCAL FEATURE", 35f, 23f, 238f, 14f, 9, muted);
+                if (mod.ActionOnly)
+                    MakeText(rt, ">", 331f, 2f, 20f, 38f, 17, muted, true);
                 else
                 {
-                    var track = MakeImage(rt, "Switch track",
-                        mod.Enabled ? accentGray : new Color(.085f, .093f, .145f, 1f),
-                        rounded, false);
-                    Place(track.rectTransform, 307f, 9f, 40f, 18f);
-                    state.Track = track;
-                    state.Glow = AddAccentGlow(rt, 299f, 2f, 56f, 32f, .48f);
+                    state.Track = MakeImage(rt, "Switch track", mod.Enabled ? accentGray : new Color(.085f,.093f,.145f,1f), rounded, false);
+                    Place(state.Track.rectTransform, 307f, 12f, 40f, 18f);
+                    state.Glow = AddAccentGlow(rt, 299f, 5f, 56f, 32f, .48f);
                     state.Glow.enabled = mod.Enabled;
-                    var knob = MakeImage(rt, "Switch knob",
-                        mod.Enabled ? white : new Color(.39f, .41f, .51f, 1f),
-                        rounded, false);
-                    Place(knob.rectTransform, mod.Enabled ? 330f : 309f, 11f, 14f, 14f);
-                    state.Knob = knob;
+                    state.Knob = MakeImage(rt, "Switch knob", mod.Enabled ? white : new Color(.39f,.41f,.51f,1f), rounded, false);
+                    Place(state.Knob.rectTransform, mod.Enabled ? 330f : 309f, 14f, 14f, 14f);
                 }
-                var favorite = MakeButton(rt, "Favorite " + mod.Id, plugin.Features.IsFavorite(mod) ? "★" : "☆",
-                    282f, 5f, 23f, 26f, Color.clear, () =>
-                    {
-                        plugin.Features.ToggleFavorite(mod);
-                        RefreshFeatureRows();
-                    }, plugin.Features.IsFavorite(mod) ? accentGray : muted, 13);
+                var favorite = MakeButton(rt, "Favorite " + mod.Id, state.IsFavorite ? "★" : "☆", 278f, 8f, 25f, 26f, Color.clear, () =>
+                {
+                    selected = mod;
+                    plugin.Features.ToggleFavorite(mod);
+                    RefreshFeatureRows();
+                }, state.IsFavorite ? accentGray : muted, 13);
                 state.Favorite = favorite.GetComponentInChildren<Text>();
             }
-            if (matches.Count == 0)
-                MakeText(list, "No features available in this category.", 12f, 12f, 680f, 36f, 13, muted);
-            featureScroll.StopMovement();
-            list.anchoredPosition = new Vector2(0f, (1f - Mathf.Clamp01(oldScroll)) * Mathf.Max(0f, list.sizeDelta.y - 508f));
+            if (matches.Count == 0) MakeText(pageRoot, "No matching features.", 12f, 40f, 680f, 36f, 14, muted);
+            var previous = MakeButton(pageRoot, "Previous page", "PREVIOUS", 0f, 418f, 130f, 34f, panelColor, () => { featurePage--; RedrawPage(); }, white, 11, true);
+            previous.interactable = featurePage > 0;
+            var next = MakeButton(pageRoot, "Next page", "NEXT", 590f, 418f, 130f, 34f, panelColor, () => { featurePage++; RedrawPage(); }, white, 11, true);
+            next.interactable = featurePage + 1 < pages;
+            var range = MakeText(pageRoot, matches.Count == 0 ? "0 / 0" : (start+1) + "-" + end + " of " + matches.Count, 140f, 418f, 440f, 34f, 12, muted);
+            range.alignment = TextAnchor.MiddleCenter;
+            featureDetail = MakeText(pageRoot, "", 4f, 456f, 712f, 48f, 11, muted);
+            featureDetail.horizontalOverflow = HorizontalWrapMode.Wrap;
+            UpdateFeatureDetail();
+        }
+
+        private void UpdateFeatureDetail()
+        {
+            if (featureDetail == null) return;
+            string detail = selected == null ? "Select a feature to view its description." : selected.Label + ": " + selected.Description;
+            if (featureDetail.text != detail) featureDetail.text = detail;
         }
 
         private void RefreshFeatureRows()
         {
             drawnRevision = plugin.Features.Revision;
-            if (featureScroll == null) return;
+            if (!featureListVisible) return;
             var matches = GetVisibleFeatures();
-            if (matches.Count != featureRows.Count) { RedrawPage(); return; }
-            for (int i = 0; i < matches.Count; i++)
-                if (matches[i] != featureRows[i].Mod) { RedrawPage(); return; }
+            int pages = Mathf.Max(1, (matches.Count + FeaturesPerPage - 1) / FeaturesPerPage);
+            if (featurePage >= pages) { RedrawPage(); return; }
+            int start = featurePage * FeaturesPerPage;
+            int count = Mathf.Min(FeaturesPerPage, matches.Count - start);
+            if (count != featureRows.Count || matches.Count != lastFeatureTotal) { RedrawPage(); return; }
+            for (int i = 0; i < count; i++) if (matches[start+i] != featureRows[i].Mod) { RedrawPage(); return; }
             foreach (var row in featureRows)
             {
-                bool enabled = row.Mod.Enabled;
-                bool favorite = plugin.Features.IsFavorite(row.Mod);
+                bool enabled = row.Mod.Enabled, favorite = plugin.Features.IsFavorite(row.Mod);
                 if (row.Enabled != enabled && row.Track != null)
                 {
-                    row.Track.color = enabled ? accentGray : new Color(.085f, .093f, .145f, 1f);
-                    row.Knob.color = enabled ? white : new Color(.39f, .41f, .51f, 1f);
-                    row.Knob.rectTransform.anchoredPosition = new Vector2(enabled ? 330f : 309f, -11f);
+                    row.Track.color = enabled ? accentGray : new Color(.085f,.093f,.145f,1f);
+                    row.Knob.color = enabled ? white : new Color(.39f,.41f,.51f,1f);
+                    row.Knob.rectTransform.anchoredPosition = new Vector2(enabled ? 330f : 309f,-14f);
                     row.Glow.enabled = enabled;
                 }
                 if (row.IsFavorite != favorite && row.Favorite != null)
@@ -1055,9 +1072,9 @@ namespace Volas
                     row.Favorite.text = favorite ? "★" : "☆";
                     row.Favorite.color = favorite ? accentGray : muted;
                 }
-                row.Enabled = enabled;
-                row.IsFavorite = favorite;
+                row.Enabled = enabled; row.IsFavorite = favorite;
             }
+            UpdateFeatureDetail();
         }
 
         private void DrawDetails(RectTransform container)

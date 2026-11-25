@@ -30,6 +30,9 @@ namespace Volas
         internal bool Authenticated { get { return token.Length != 0 && Time.realtimeSinceStartup - verifiedAt <= 135f; } }
         internal bool IsOwner { get { return Authenticated && role == "owner"; } }
         internal bool PanelOpen { get { return panel; } }
+        private int failures;
+        private GUIStyle announcementStyle;
+        internal void OpenAccountPanel() { if (Authenticated) OpenPanel(); }
         internal LicenseClient(VolasPlugin owner) { plugin = owner; }
         #endregion
 
@@ -78,11 +81,21 @@ namespace Volas
         private void Start(string action, string body)
         {
             if (busy) return;
+            if (action == "login" && !ValidKey(body)) { status = "Enter a complete VOLAS license key."; return; }
+            if (action != "login" && !Authenticated) return;
+            if ((action == "announce" || action == "event") && !IsOwner) return;
             busy = true;
             status = action == "login" ? "Verifying key..." : action == "announce" ? "Sending announcement..." : status;
             nextHeartbeat = Time.realtimeSinceStartup + (CommunityEffects ? 20f : 45f) + UnityEngine.Random.Range(0f, 5f);
             plugin.StartCoroutine(Request(action, body, generation));
         }
+        private static bool ValidKey(string value)
+        {
+            if (string.IsNullOrEmpty(value) || value.Length != 70 || !value.StartsWith("VOLAS-", StringComparison.OrdinalIgnoreCase)) return false;
+            for (int i = 6; i < value.Length; i++) if (!Uri.IsHexDigit(value[i])) return false;
+            return true;
+        }
+
         private IEnumerator Request(string action, string body, int attempt)
         {
             using (var request = new UnityWebRequest(Endpoint, "POST"))
@@ -106,8 +119,9 @@ namespace Volas
                 }
                 if (request.responseCode != 200)
                 {
-                    status = "Request failed. Try again.";
-                    nextHeartbeat = Time.realtimeSinceStartup + 15f;
+                    failures = Mathf.Min(failures + 1, 4);
+                    status = request.responseCode == 429 ? "Service busy. Retrying verification." : "Network request failed. Try again.";
+                    nextHeartbeat = Time.realtimeSinceStartup + Mathf.Min(45f, 5f * (1 << failures));
                     yield break;
                 }
                 string[] fields = request.downloadHandler.text.Split('\n');
@@ -120,6 +134,7 @@ namespace Volas
                     if (fields[2].Length != 64) { status = "Invalid session response."; yield break; }
                     token = fields[2]; key = ""; HidePanel();
                 }
+                failures = 0;
                 role = fields[1]; verifiedAt = Time.realtimeSinceStartup;
                 licensed = fields[5]; revoked = fields[6]; online = fields[7];
                 int remaining;
@@ -151,6 +166,7 @@ namespace Volas
                 GUI.Box(bounds, "");
                 GUILayout.BeginArea(new Rect(bounds.x+18f,bounds.y+16f,bounds.width-36f,bounds.height-32f));
                 GUILayout.Label(Authenticated ? (IsOwner ? "VOLAS / OWNER CONTROL" : "VOLAS / SESSION") : "VOLAS / LICENSE REQUIRED");
+                GUILayout.Label("Volas 1.8.0  |  Secure session");
                 GUILayout.Space(9f);
                 if (!Authenticated)
                 {
@@ -160,6 +176,7 @@ namespace Volas
                     sharePresence = GUILayout.Toggle(sharePresence, "Share anonymous online presence (optional)");
                     GUI.enabled = !busy;
                     if (GUILayout.Button("Verify license", GUILayout.Height(34f))) Start("login", key.Trim());
+                    if (busy) GUILayout.Label("Connecting to Volas license service...");
                     GUI.enabled = true;
                 }
                 else
@@ -201,8 +218,8 @@ namespace Volas
             {
                 float width = Mathf.Min(480f, Screen.width-24f);
                 GUI.Box(new Rect((Screen.width-width)*.5f,18f,width,85f), "VOLAS ANNOUNCEMENT");
-                var style = new GUIStyle(GUI.skin.label) { wordWrap = true, richText = false, alignment = TextAnchor.UpperCenter };
-                GUI.Label(new Rect((Screen.width-width)*.5f+12f,43f,width-24f,54f),announcement,style);
+                if (announcementStyle == null) announcementStyle = new GUIStyle(GUI.skin.label) { wordWrap = true, richText = false, alignment = TextAnchor.UpperCenter };
+                GUI.Label(new Rect((Screen.width-width)*.5f+12f,43f,width-24f,54f),announcement,announcementStyle);
             }
         }
         internal void Dispose() { ++generation; token = ""; key = ""; RestoreCursor(); }

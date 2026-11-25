@@ -49,6 +49,7 @@ namespace Volas
 
         private readonly VolasPlugin plugin;
         internal readonly List<Feature> All = new List<Feature>();
+        private readonly Dictionary<string, Feature> byId = new Dictionary<string, Feature>(StringComparer.OrdinalIgnoreCase);
         internal readonly List<string> Categories = new List<string>();
         private readonly HashSet<string> favorites = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         internal int Revision { get; private set; }
@@ -66,7 +67,9 @@ namespace Volas
 
         internal void Add(Feature f)
         {
-            if (Find(f.Id) != null) throw new InvalidOperationException("Duplicate Volas feature: " + f.Id);
+            if (f == null || string.IsNullOrWhiteSpace(f.Id) || f.OnEnable == null) throw new ArgumentException("Invalid feature registration");
+            if (byId.ContainsKey(f.Id)) throw new InvalidOperationException("Duplicate Volas feature: " + f.Id);
+            byId.Add(f.Id, f);
             All.Add(f);
             if (Categories.Count == 0) { Categories.Add("All"); Categories.Add("Favorites"); }
             if (!Categories.Contains(f.Category)) Categories.Add(f.Category);
@@ -86,7 +89,8 @@ namespace Volas
 
         internal Feature Find(string id)
         {
-            return All.Find(f => f.Id == id);
+            Feature feature;
+            return id != null && byId.TryGetValue(id, out feature) ? feature : null;
         }
 
         internal bool IsOn(string id)
@@ -146,6 +150,8 @@ namespace Volas
                 Disable(f);
                 return;
             }
+            if (plugin.Licensing == null || !plugin.Licensing.Authenticated)
+            { LastMessage = "License required"; Revision++; return; }
             if (f.NeedsModdedRoom && !plugin.Game.IsSoloOrModdedRoom())
             {
                 LastMessage = f.Label + ": solo or MODDED room only";
@@ -211,7 +217,7 @@ namespace Volas
                     continue;
                 }
                 try { f.OnUpdate?.Invoke(plugin); }
-                catch (Exception ex) { Fault(f, ex); Disable(f); }
+                catch (Exception ex) { Disable(f); Fault(f, ex); }
             }
         }
 
@@ -227,7 +233,7 @@ namespace Volas
                     continue;
                 }
                 try { f.OnFixedUpdate?.Invoke(plugin); }
-                catch (Exception ex) { Fault(f, ex); Disable(f); }
+                catch (Exception ex) { Disable(f); Fault(f, ex); }
             }
         }
 
